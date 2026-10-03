@@ -1,0 +1,17 @@
+.DS_Store
+.build/
+.swiftpm/
+build/
+*.xcuserstate
+xcuserdata/
+.env
+.env.*
+!.env.example
+*.log
+*.p12
+*.pfx
+*.key
+*.pem
+*.mobileprovision
+*.xcarchive
+*.dSYM/

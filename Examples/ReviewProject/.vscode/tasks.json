@@ -1,0 +1,14 @@
+{
+    // Synthetic tasks only. No network service or real project is started.
+    "version": "2.0.0",
+    "tasks": [
+        { "label": "Web", "type": "shell", "isBackground": true,
+          "command": "while true; do printf 'Web heartbeat\\n'; sleep 3; done" },
+        { "label": "Worker", "type": "shell", "isBackground": true,
+          "command": "while true; do printf 'Worker heartbeat\\n'; sleep 4; done" },
+        { "label": "API", "type": "shell", "isBackground": true,
+          "command": "while true; do printf 'API heartbeat\\n'; sleep 5; done" },
+        { "label": "Check", "type": "shell", "command": "printf 'Check complete\\n'; exit 0" },
+        { "label": "Failure example", "type": "shell", "command": "printf 'Expected test failure\\n'; exit 17" },
+    ]
+}

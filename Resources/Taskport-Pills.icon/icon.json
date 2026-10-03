@@ -1,0 +1,76 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "srgb:0.25000,0.64000,0.77000,1.00000",
+      "srgb:0.34000,0.24000,0.60000,1.00000"
+    ]
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name" : "play-top.svg",
+          "name" : "Play top",
+          "opacity" : 0.85
+        },
+        {
+          "glass" : true,
+          "image-name" : "stop-top.svg",
+          "name" : "Stop top",
+          "opacity" : 0.85
+        },
+        {
+          "fill" : "automatic",
+          "glass" : true,
+          "image-name" : "play-bottom.svg",
+          "name" : "Play bottom",
+          "opacity" : 0.85
+        },
+        {
+          "glass" : true,
+          "image-name" : "stop-bottom.svg",
+          "name" : "Stop bottom",
+          "opacity" : 0.85
+        }
+      ],
+      "name" : "Play and stop",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.3
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.65
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name" : "panel-top.svg",
+          "name" : "Top capsule",
+          "opacity" : 0.15
+        },
+        {
+          "glass" : true,
+          "image-name" : "panel-bottom.svg",
+          "name" : "Bottom capsule",
+          "opacity" : 0.3
+        }
+      ],
+      "name" : "Glass capsules",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.35
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.75
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}

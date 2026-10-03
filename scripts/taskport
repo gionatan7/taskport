@@ -1,0 +1,8 @@
+#!/bin/bash
+set -euo pipefail
+taskport_cli="/Applications/Taskport.app/Contents/MacOS/taskport-cli"
+if [[ ! -x "$taskport_cli" ]]; then
+  echo 'Build and install Taskport first: bash scripts/build.sh' >&2
+  exit 2
+fi
+exec "$taskport_cli" "$@"
