@@ -8,6 +8,7 @@ Source publication and binary distribution are separate decisions. A source prev
 bun scripts/check-public-source.mjs
 bun test scripts/check-app-privacy.test.mjs
 bun test scripts/verify-licenses.test.mjs
+bun test scripts/check-toolchain.test.mjs
 bash scripts/swift.sh test
 bash scripts/build.sh --check
 ```
@@ -42,7 +43,8 @@ Builds bundle the checked-in licenses/notices and verify their integrity before 
 
 Before distributing binaries:
 
-- Complete the compiler/runtime and font-glyph attribution checks. Verify exact corresponding source and a working build/relink distribution for GPL/LGPL/MPL obligations, including statically linked libintl; [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) records provenance and outstanding evidence.
+- Finish verifying the compiler/runtime inventory and unresolved embedded-code provenance. Constituent font licenses and verified compiler input notices are now retained; [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) records the evidence and remaining gaps.
+- Assemble exact corresponding source and test a working build/relink distribution for GPL/LGPL/MPL obligations, including statically linked libintl. The pinned producer's source build currently stops at missing Apple's Metal Toolchain; normal Taskport builds use a precompiled engine and do not need this component. Do not replace this verification with source URLs alone.
 - Test a clean-machine build, supported architectures, and the terminal/input/accessibility acceptance items in [architecture](architecture.md#current-limitations).
 - Prepare distribution signing/notarization for normal macOS installation.
 - Audit the actual final artifact separately: `bun scripts/check-app-privacy.mjs APP_BUNDLE`.

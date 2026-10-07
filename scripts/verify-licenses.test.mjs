@@ -33,7 +33,9 @@ test('accepts all canonical license texts and original shell resource notice', (
 }));
 
 test('fails when required bundled notices, manifests, or licenses are missing', async () => {
-  for (const file of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'LICENSES/SHA256SUMS', 'LICENSES/libintl/COPYING.LIB', 'LICENSES/JetBrainsMono/OFL.txt']) {
+  for (const file of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'LICENSES/SHA256SUMS', 'LICENSES/libintl/COPYING.LIB', 'LICENSES/JetBrainsMono/OFL.txt',
+    'LICENSES/NerdFontsSymbolsOnly/glyphs/codicons-LICENSE.txt', 'LICENSES/NerdFontsSymbolsOnly/glyphs/font-logos-LICENSE',
+    'LICENSES/Zig/LICENSE', 'LICENSES/LLVM/libcxx-LICENSE.TXT', 'LICENSES/simdutf/FUCHSIA-NOTICE']) {
     await fixture(async ({ resources, verify }) => {
       await rm(join(resources, file));
       expect(verify().status).toBe(1);

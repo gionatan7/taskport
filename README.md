@@ -14,7 +14,9 @@ Taskport is an experimental source preview, not a production-ready binary releas
 
 ## Build and run
 
-Requires macOS 14+ and full Xcode 26+ for the icon compiler. Tested on Apple silicon with Xcode 27. Dependencies are pinned; the first build downloads the terminal wrapper and framework into ignored project-local caches.
+Requires macOS 14+ to run. Building requires full Xcode 27.x with Apple Swift 6.4.x (patch releases are accepted); Command Line Tools alone are not supported. Tested on Apple silicon. The build checks these requirements before downloading dependencies. Older Swift compilers can crash during optimized compilation. Dependencies are pinned; the first build downloads the terminal wrapper and framework into ignored project-local caches.
+
+If another toolchain is selected, use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer bash scripts/build.sh`. This selects an already-installed Xcode for that command without changing system settings. SwiftPM and the icon compiler use the same selected Xcode.
 
 **The default build installs into `/Applications/Taskport.app`. Quit Taskport first.** It verifies and moves the new bundle, preserving the previous installation until replacement succeeds. It does not stop tasks, launch the app, or install the CLI.
 

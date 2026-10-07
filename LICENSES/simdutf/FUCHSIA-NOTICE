@@ -1,0 +1,11 @@
+The pinned Ghostty source includes the following attribution in
+pkg/simdutf/vendor/simdutf.h, immediately above scalar::utf8::validate:
+
+// credit: based on code from Google Fuchsia (Apache Licensed)
+
+Source: https://github.com/ghostty-org/ghostty/blob/82938b633ba646db38591d969c3c526332bd7e65/pkg/simdutf/vendor/simdutf.h
+
+The Apache 2.0 license text is preserved in LICENSE-APACHE in this directory.
+The vendored header does not identify the original Fuchsia revision or
+copyright header. This notice preserves the available attribution; it does
+not resolve that missing provenance.

@@ -25,9 +25,7 @@ final class TaskSession: Identifiable {
     let id: UUID
     let projectID: UUID
     let terminal: TerminalViewState
-    private(set) var phase: RunPhase = .stopped {
-        didSet { if phase != oldValue { onPhaseChange?() } }
-    }
+    private(set) var phase: RunPhase = .stopped
     @ObservationIgnored var onPhaseChange: (() -> Void)?
     @ObservationIgnored var onRemoteURL: ((URL) -> Void)?
     private(set) var shellReady = false
@@ -95,6 +93,14 @@ final class TaskSession: Identifiable {
 
     var canStart: Bool { !isTerminating && !phase.isActive && !manualCommandRunning && !hasPendingInput }
 
+    private func setPhase(_ next: RunPhase) {
+        guard phase != next else { return }
+        phase = next
+        // Workspace callbacks read observed state and can close terminals.
+        // Run them after Observation has finished the property's mutation.
+        onPhaseChange?()
+    }
+
     func start(task: ProjectTask, directory: String, focus: Bool = true) throws {
         guard !isTerminating else { throw WorkspaceError("This terminal's previous shell is still closing. Try again when it has stopped.") }
         guard !phase.isActive else { return }
@@ -105,7 +111,7 @@ final class TaskSession: Identifiable {
         }
         stopWasRequested = false
         isTerminating = false
-        phase = .starting
+        setPhase(.starting)
         isTunnel = task.sourceKey == "builtin:cloudflare"
         remoteURL = nil
         tunnelReadiness = TunnelReadiness()
@@ -120,7 +126,7 @@ final class TaskSession: Identifiable {
             try? await Task.sleep(for: .seconds(15))
             guard let self, self.startingAt == requestTime, self.phase == .starting else { return }
             self.pendingTask = nil
-            self.phase = .failed("Shell startup needs attention")
+            self.setPhase(.failed("Shell startup needs attention"))
         }
     }
 
@@ -130,7 +136,7 @@ final class TaskSession: Identifiable {
         guard phase.isActive || (includeManual && manualCommandRunning) else { return }
         pasteConfirmation.cancel()
         stopWasRequested = true
-        if phase.isActive { phase = .stopping }
+        if phase.isActive { setPhase(.stopping) }
         process?.interrupt()
         if focus { terminal.requestFocus() }
     }
@@ -141,7 +147,7 @@ final class TaskSession: Identifiable {
         pendingTask = nil
         // Closing an idle shell to change cwd is maintenance, not task dismissal.
         if !preservePhaseOnExit { stopWasRequested = true }
-        if phase.isActive { phase = .stopping }
+        if phase.isActive { setPhase(.stopping) }
         process?.terminate()
     }
 
@@ -177,7 +183,7 @@ final class TaskSession: Identifiable {
             shellPID = shell.pid
             hasSeenPrompt = false
         } catch {
-            phase = .failed("Couldn't start the shell")
+            setPhase(.failed("Couldn't start the shell"))
             pendingTask = nil
             throw error
         }
@@ -191,7 +197,7 @@ final class TaskSession: Identifiable {
                 to: bootstrapDirectory.appendingPathComponent("task.zsh"))
             shellReady = false
             process?.write(Data(command.utf8))
-        } catch { phase = .failed(error.localizedDescription) }
+        } catch { setPhase(.failed(error.localizedDescription)) }
     }
 
     private func userInput(_ data: Data) {
@@ -221,7 +227,7 @@ final class TaskSession: Identifiable {
             case .busy:
                 shellReady = false
                 hasPendingInput = false
-                if phase == .starting { phase = .running }
+                if phase == .starting { setPhase(.running) }
                 else if !phase.isActive { manualCommandRunning = true }
             case .ready(let code):
                 // Approval aimed at a finished program must not reach the returned shell.
@@ -233,7 +239,7 @@ final class TaskSession: Identifiable {
                 hasPendingInput = false
                 if initial, pendingTask != nil { sendPendingTask() }
                 else if phase.isActive {
-                    phase = .exited(code)
+                    setPhase(.exited(code))
                     try? FileManager.default.removeItem(at: bootstrapDirectory.appendingPathComponent("task.zsh"))
                 }
             }
@@ -249,7 +255,7 @@ final class TaskSession: Identifiable {
         manualCommandRunning = false
         hasPendingInput = false
         pendingTask = nil
-        if !preservePhaseOnExit { phase = .exited(code) }
+        if !preservePhaseOnExit { setPhase(.exited(code)) }
         preservePhaseOnExit = false
         bridge.receive("\r\n[Shell closed · exit \(code)]\r\n")
         try? FileManager.default.removeItem(at: bootstrapDirectory)

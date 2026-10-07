@@ -9,6 +9,7 @@ elif [[ "$#" != 0 ]]; then
   echo 'Usage: bash scripts/build.sh [--check]' >&2
   exit 2
 fi
+bash scripts/check-toolchain.sh
 taskport_flags=(--configuration release -debug-info-format none
   -Xswiftc -file-prefix-map -Xswiftc "$taskport_root=/src/taskport"
   -Xswiftc -file-compilation-dir -Xswiftc /src/taskport

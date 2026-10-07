@@ -40,7 +40,7 @@ struct NativeTerminalDeck: NSViewRepresentable {
             let retainedIDs = Set(sessions.keys).union(visibleIDs).intersection(allIDs)
             for id in Array(hosts.keys) where !retainedIDs.contains(id) {
                 if let host = hosts.removeValue(forKey: id) {
-                    view.removeArrangedSubview(host)
+                    if view.arrangedSubviews.contains(host) { view.removeArrangedSubview(host) }
                     host.removeFromSuperview()
                 }
             }

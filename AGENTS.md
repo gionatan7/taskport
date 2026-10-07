@@ -15,6 +15,7 @@
 
 ## Dependencies and builds
 
+- Packaging requires full Xcode 27.x and Apple Swift 6.4.x; `scripts/check-toolchain.sh` rejects unsupported versions before SwiftPM resolution. Swift commands use `xcrun` so they match the selected Xcode; use a command-scoped `DEVELOPER_DIR` rather than changing system selection. Test the preflight with `bun test scripts/check-toolchain.test.mjs`.
 - Use `bash scripts/swift.sh build` for project-local SwiftPM/compiler caches.
 - Use `bash scripts/build.sh` for release packaging, signing, and automatic installation. Verify Swift behavior with `bash scripts/swift.sh test`. Privacy scanning is a separate manual pre-release audit: `bun scripts/check-app-privacy.mjs APP_BUNDLE`; test the scanner with `bun test scripts/check-app-privacy.test.mjs`. Bun is not required to build or install.
 - After successful normal packaging, the build script calls `bash scripts/install.sh STAGED_APP` to move the fresh signature-verified bundle into `/Applications/Taskport.app`. `bash scripts/build.sh --check` is the explicit verification-only exception: it builds/signs/verifies the same package and removes staging without installing; it does not run a privacy scan. Quit running Taskport instances before installing; never stop user tasks without authorization. Keep only the installed app bundle and launch only `/Applications/Taskport.app`, not a build-folder copy. If the user says they will relaunch, leave the app closed. Ignored SwiftPM debug/test outputs are not packaged apps or publication inputs.
