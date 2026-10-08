@@ -34,6 +34,10 @@ bash scripts/build.sh --check
 
 Packaging remaps compiler paths, strips debug/local symbols, and ad-hoc signs the app. Staging is cleaned afterward. Privacy scans are separate manual audits, not build steps; Bun is not needed to build. Ad-hoc signing and a successful build do not make a distributable release.
 
+To prepare a **local binary candidate without installing or launching it**, run `bash scripts/prepare-release.sh`. This requires Bun and Python 3 for the privacy and ZIP audits. It produces an Apple silicon ZIP and SHA-256 checksum under ignored `build/release-candidate/`, scans local identity markers without reporting their values, excludes filesystem metadata, and verifies the extracted app. It refuses to overwrite an existing candidate. `bash scripts/build.sh --package OUTPUT_APP` is the lower-level packaging-only mode and does not run privacy scans. See [publication checks](docs/public-source.md) for the release checklist and privacy limitations.
+
+Prepare the accompanying dependency sources and libintl relinking materials with `python3 scripts/prepare-source-release.py`. Downloads, the temporary Zig compiler, and caches remain project-local and are cleaned afterward. It retains a source/relink archive and checksum beside the ZIP, with neutral metadata and a local-identity audit. The [relinking instructions](docs/dependency-relinking.md) describe the tested modified-library path; it needs no Metal Toolchain or paid Apple account. Publish both archives together.
+
 The active icon source is `Resources/Taskport-Pills.icon`; edit it in Icon Composer.
 
 ## Using Taskport

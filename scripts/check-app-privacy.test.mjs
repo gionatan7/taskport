@@ -32,6 +32,27 @@ test('rejects checkout paths outside the home and encoded paths', () => fixture(
   expect((await checkAppPrivacy(root, [prefix])).findings.some(item => item.reason === 'local build/home path')).toBe(true);
 }));
 
+test('rejects local identity markers in UTF-8 and both UTF-16 byte orders without reporting them', () => fixture(async root => {
+  const identity = 'Fictional Élise Example';
+  for (const [name, bytes] of [
+    ['utf8', Buffer.from(identity.toUpperCase())],
+    ['utf16le', Buffer.from(identity, 'utf16le')],
+    ['utf16be', Buffer.from(identity, 'utf16le').swap16()],
+  ]) await writeFile(join(root, name), bytes);
+  const result = await checkAppPrivacy(root, [], [identity]);
+  expect(result.findings.filter(item => item.reason === 'local identity marker')).toHaveLength(3);
+  expect(JSON.stringify(result)).not.toContain(identity);
+  await writeFile(join(root, 'utf8'), 'Ordinary resource text');
+  expect((await checkAppPrivacy(root, [], ['ab'])).findings).toEqual([]);
+}));
+
+test('redacts filenames that themselves contain personal identity markers', () => fixture(async root => {
+  await writeFile(join(root, 'FictionalIdentity.txt'), 'FictionalIdentity');
+  const result = await checkAppPrivacy(root, [], ['FictionalIdentity']);
+  expect(result.findings).toEqual([{ file: '[redacted filename 1]', reason: 'local identity marker' }]);
+  expect(JSON.stringify(result)).not.toContain('FictionalIdentity');
+}));
+
 test('rejects private temporary paths, credential files and tokens without printing contents', () => fixture(async root => {
   await writeFile(join(root, '.env'), 'test only');
   await writeFile(join(root, 'Executable'), '/private/var' + '/folders/fictional/cache\0ghp_' + 'x'.repeat(36));

@@ -23,7 +23,11 @@ Before committing or pushing:
 
 The source scanner checks home paths, common credential patterns, credential-bearing URLs, private configuration/signing files, and symlinks. It reports filenames/categories, not matched values. It excludes `.git/`, `.build/`, `.swiftpm/`, `build/`, and `.DS_Store`. It is a heuristic, not a Git-history audit or a guarantee against arbitrary encoded secrets. Bun is required for these audit commands, not for building.
 
-`build.sh --check` packages and verifies without installing or touching live tasks. Normal `build.sh` installs into Applications after you quit Taskport. Neither mode runs privacy scans.
+`build.sh --check` packages and verifies without installing or touching live tasks. `build.sh --package OUTPUT_APP` retains a fresh verified bundle without installing. Normal `build.sh` installs into Applications after you quit Taskport. These build modes do not run privacy scans.
+
+`bash scripts/prepare-release.sh` is the separate candidate preparation/audit command. It runs the packaging-only build, checks the app with `--local-identities`, creates a ZIP with neutral timestamps and without Unix ownership or extra fields, inspects both local and central ZIP headers, and checks the extracted app's content, notices, and signature. It leaves only a ZIP and SHA-256 checksum in `build/release-candidate/` and refuses overwrites. Complete the binary release checklist below before publication.
+
+`python3 scripts/prepare-source-release.py` prepares the matching source/relink archive and checksum. It verifies pinned download hashes, includes dependency source and an engine archive without libintl, and checks neutral ownership/timestamps and local identity/path markers. Temporary downloads, compilers, and caches are project-local and removed. Upstream public source, fixtures, and author attribution remain verbatim. Run the [documented relink verification](dependency-relinking.md) on the extracted archive; neither a source URL nor GitHub's automatic source archive substitutes for these materials.
 
 ## Runtime privacy and trust
 
@@ -43,10 +47,10 @@ Builds bundle the checked-in licenses/notices and verify their integrity before 
 
 Before distributing binaries:
 
-- Finish verifying the compiler/runtime inventory and unresolved embedded-code provenance. Constituent font licenses and verified compiler input notices are now retained; [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) records the evidence and remaining gaps.
-- Assemble exact corresponding source and test a working build/relink distribution for GPL/LGPL/MPL obligations, including statically linked libintl. The pinned producer's source build currently stops at missing Apple's Metal Toolchain; normal Taskport builds use a precompiled engine and do not need this component. Do not replace this verification with source URLs alone.
+- Preserve the compiler/runtime inventory, constituent font licenses, and embedded-code attribution in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). Its provenance notes distinguish verified input/source history from the original Fuchsia revision that upstream does not identify.
+- Publish the exact corresponding-source/relink archive beside the matching app ZIP with the same free access. The modified-libintl function test and Taskport source rebuild/relink have passed without Metal; see [relinking materials](dependency-relinking.md). The archive also includes MPL-covered z2d source and the full pinned dependency source graph. Whole-engine compilation is a separate, unverified route that needs Apple's Metal Toolchain.
 - Test a clean-machine build, supported architectures, and the terminal/input/accessibility acceptance items in [architecture](architecture.md#current-limitations).
-- Prepare distribution signing/notarization for normal macOS installation.
+- For the free preview route, retain ad-hoc signing and clearly document the first-launch Privacy & Security → Open Anyway step. Developer ID signing/notarization remains an optional future distribution route.
 - Audit the actual final artifact separately: `bun scripts/check-app-privacy.mjs APP_BUNDLE`.
 
-The app scanner checks filenames and readable strings, including binary and NUL-padded paths, and fails on unreadable entries, symlinks, private/debug artifacts, detected local paths, and common secret patterns without printing their contents. It does not prove compressed/encoded data is safe or that licenses are satisfied. Compiler path remapping and stripping do not sanitize arbitrary literals or prebuilt dependencies; old builds remain unchecked.
+The app scanner checks filenames and readable strings, including binary, NUL-padded, and UTF-16 text, and fails on unreadable entries, symlinks, private/debug artifacts, detected local paths, and common secret patterns without printing their contents. `--local-identities` additionally checks the login/full name, full-name words of at least four characters, configured Git name/email, available computer/host names, and readable hardware serial/UUID; marker values are not saved or reported. It does not prove compressed/encoded data is safe or that licenses are satisfied. Compiler path remapping and stripping do not sanitize arbitrary literals or prebuilt dependencies; old builds remain unchecked.

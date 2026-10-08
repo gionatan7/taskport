@@ -3,10 +3,18 @@ set -euo pipefail
 taskport_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$taskport_root"
 taskport_check=false
+taskport_package=
 if [[ "$#" == 1 && "$1" == --check ]]; then
   taskport_check=true
+elif [[ "$#" == 2 && "$1" == --package && -n "$2" ]]; then
+  taskport_package="$2"
+  [[ "$taskport_package" == /* ]] || taskport_package="$taskport_root/$taskport_package"
+  if [[ -e "$taskport_package" || -L "$taskport_package" ]]; then
+    echo 'The package destination already exists; choose a fresh path.' >&2
+    exit 1
+  fi
 elif [[ "$#" != 0 ]]; then
-  echo 'Usage: bash scripts/build.sh [--check]' >&2
+  echo 'Usage: bash scripts/build.sh [--check | --package OUTPUT_APP]' >&2
   exit 2
 fi
 bash scripts/check-toolchain.sh
@@ -40,12 +48,18 @@ ditto LICENSES "$taskport_app/Contents/Resources/LICENSES"
 mkdir -p "$taskport_app/Contents/Resources/AgentSkills/taskport"
 cp skills/taskport/SKILL.md "$taskport_app/Contents/Resources/AgentSkills/taskport/SKILL.md"
 bash scripts/verify-licenses.sh "$taskport_app"
+# Finder tags, quarantine/download locations, and other local metadata are not release inputs.
+xattr -cr "$taskport_app"
 # Strip debug/local symbols before signing; never rewrite binary strings.
 strip -S -x "$taskport_app/Contents/MacOS/Taskport" "$taskport_app/Contents/MacOS/taskport-cli"
 codesign --force --sign - "$taskport_app"
 codesign --verify --deep --strict "$taskport_app"
 if [[ "$taskport_check" == true ]]; then
   echo 'Release app verified; check-only mode leaves the installed app and running tasks untouched.'
+elif [[ -n "$taskport_package" ]]; then
+  mkdir -p "$(dirname "$taskport_package")"
+  mv "$taskport_app" "$taskport_package"
+  echo 'Packaged app verified; the installed app and running tasks were not changed.'
 else
   bash scripts/install.sh "$taskport_app"
 fi
