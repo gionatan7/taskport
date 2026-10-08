@@ -1,6 +1,8 @@
 # Local control
 
-Build with `bash scripts/build.sh`. The app bundles `Contents/MacOS/taskport-cli`. Taskport → Settings installs or uninstalls `~/.local/bin/taskport`, a symlink to that executable. Ensure this directory is on PATH; the installer never changes shell configuration or overwrites another command. Developers may still use `bash scripts/taskport`. The portable skill invokes `taskport` from PATH and has no checkout dependency. Names differ from the GUI executable to avoid collisions on case-insensitive volumes.
+Build with `bash scripts/build.sh`. The app bundles `Contents/MacOS/taskport-cli`. Taskport → Settings → Integrations installs or uninstalls `~/.local/bin/taskport`, a symlink to that executable. Ensure this directory is on PATH; the installer never changes shell configuration or overwrites another command. Developers may still use `bash scripts/taskport`. Names differ from the GUI executable to avoid collisions on case-insensitive volumes.
+
+Integrations also installs the portable agent skill into selected standard user-wide folders, defaulting to `~/.agents/skills` for Codex and compatible agents. It links each `taskport` skill folder to `Contents/Resources/AgentSkills/taskport` in this app and confirms paths before changes. Existing files or other links are never replaced; move an existing skill aside yourself before installing the bundled version. Uninstall removes only links to this app. The skill invokes `taskport` from PATH and has no checkout dependency. Custom agent configuration directories require manual installation.
 
 Global installation does not bypass agent sandbox permissions. If access to the socket or macOS launch services is denied, request execution approval instead of treating the app as missing or launching a server directly.
 

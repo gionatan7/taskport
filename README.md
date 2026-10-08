@@ -48,11 +48,11 @@ Set a Local URL on each server task. Task links nests by task when several have 
 
 Temporary tasks disappear after success or an explicit stop; failures stay inspectable until dismissed. Temporary tasks and tunnels never survive relaunch.
 
-Definitions are stored privately in macOS Application Support, not this checkout. Settings → Startup → Resume running tasks on launch is enabled by default and restarts previously running pinned services as new processes; it does not restore scrollback. Turning it off clears the resume list without stopping current work. Close hides the window and retains sessions; Quit stops owned sessions, confirming when work is active.
+Definitions are stored privately in macOS Application Support, not this checkout. Settings → General → Resume running tasks on launch is enabled by default and restarts previously running pinned services as new processes; it does not restore scrollback. Turning it off clears the resume list without stopping current work. Close hides the window and retains sessions; Quit stops owned sessions, confirming when work is active.
 
 ## CLI and agents
 
-Taskport → Settings installs or uninstalls `~/.local/bin/taskport`, a symlink to the bundled CLI. Ensure that directory is on PATH; installation does not modify shell configuration or overwrite another command. Keep the app at its installed location.
+Taskport → Settings → Integrations installs or uninstalls `~/.local/bin/taskport`, a symlink to the bundled CLI. Ensure that directory is on PATH; installation does not modify shell configuration or overwrite another command. Keep the app at its installed location.
 
 ```sh
 taskport launch
@@ -62,7 +62,9 @@ taskport ports list
 taskport help
 ```
 
-Read [CLI guidance](docs/cli.md) for task control, asynchronous results, and permission boundaries. Copy or link [skills/taskport](skills/taskport/SKILL.md) into your agent's skills directory; it uses the global CLI and needs no source checkout.
+The same pane installs the bundled [Taskport skill](skills/taskport/SKILL.md). Select one or more standard user-wide locations: Shared (`~/.agents/skills`, the default for Codex and compatible agents), Claude Code, Cursor, GitHub Copilot, Gemini CLI, or OpenCode. Each installation links to the app's bundled instructions and stays current with app updates; no source checkout is needed. Confirmations list the affected paths. Existing skills are left untouched, and uninstall removes only this app's links, not the app, CLI, or projects. Custom agent configuration directories are not detected; install there manually if needed.
+
+Read [CLI guidance](docs/cli.md) for task control, asynchronous results, and permission boundaries.
 
 Before choosing a new server port, `taskport ports list` returns TCP listening ports visible to your user, including servers outside Taskport. It works even when the app is closed; the result is a snapshot, not a reservation.
 

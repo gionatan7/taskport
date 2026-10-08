@@ -36,7 +36,7 @@ struct TaskportApp: App {
                 Button("Show Taskport") { appDelegate.showWindow() }.keyboardShortcut("0", modifiers: .command)
             }
         }
-        Settings { CommandLineSettings(store: appDelegate.store) }
+        Settings { TaskportSettings(store: appDelegate.store) }
     }
 }
 

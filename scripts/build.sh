@@ -37,6 +37,8 @@ xcrun actool Resources/Taskport-Pills.icon \
 ditto "$taskport_bin/GhosttyKit_GhosttyTerminal.bundle" "$taskport_app/Contents/Resources/GhosttyKit_GhosttyTerminal.bundle"
 cp LICENSE THIRD_PARTY_NOTICES.md "$taskport_app/Contents/Resources/"
 ditto LICENSES "$taskport_app/Contents/Resources/LICENSES"
+mkdir -p "$taskport_app/Contents/Resources/AgentSkills/taskport"
+cp skills/taskport/SKILL.md "$taskport_app/Contents/Resources/AgentSkills/taskport/SKILL.md"
 bash scripts/verify-licenses.sh "$taskport_app"
 # Strip debug/local symbols before signing; never rewrite binary strings.
 strip -S -x "$taskport_app/Contents/MacOS/Taskport" "$taskport_app/Contents/MacOS/taskport-cli"
