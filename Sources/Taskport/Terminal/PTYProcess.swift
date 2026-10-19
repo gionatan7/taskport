@@ -9,6 +9,7 @@ final class PTYProcess {
     private var reader: DispatchSourceRead?
     private var writer: DispatchSourceWrite?
     private var exitSource: DispatchSourceProcess?
+    private var terminationTask: Task<Void, Never>?
     private var pendingInput = Data()
     var onOutput: (Data) -> Void = { _ in }
     var onExit: (Int32) -> Void = { _ in }
@@ -62,12 +63,21 @@ final class PTYProcess {
 
     func terminate() {
         guard pid > 0 else { return }
+        didExit()
+        guard pid > 0, terminationTask == nil else { return }
         let ownedPID = pid
         _ = tp_signal_session(ownedPID, SIGTERM)
-        Task { [weak self] in
+        terminationTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
-            guard let self, self.pid == ownedPID else { return }
+            guard let self, self.pid == ownedPID, !Task.isCancelled else { return }
+            self.didExit()
+            guard self.pid == ownedPID else { return }
             _ = tp_signal_session(ownedPID, SIGKILL)
+            // A process-source notification is not the only path that must reap the shell.
+            while self.pid == ownedPID, !Task.isCancelled {
+                self.didExit()
+                if self.pid == ownedPID { try? await Task.sleep(for: .milliseconds(25)) }
+            }
         }
     }
 
@@ -101,17 +111,16 @@ final class PTYProcess {
 
     private func didExit() {
         guard pid > 0 else { return }
-        readAvailable()
-        // Catch remaining same-session children before reaping releases the PID.
-        _ = tp_signal_session(pid, SIGKILL)
         var code: Int32 = 0
         guard tp_reap(pid, &code) == 1 else { return }
+        readAvailable()
         reader?.cancel(); reader = nil
         writer?.cancel(); writer = nil
         exitSource?.cancel(); exitSource = nil
         Darwin.close(master)
         master = -1
         pid = 0
+        terminationTask?.cancel(); terminationTask = nil
         pendingInput.removeAll()
         onExit(code)
     }

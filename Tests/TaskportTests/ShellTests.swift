@@ -1,8 +1,54 @@
 import AppKit
+import TaskportPTY
 import Testing
 @testable import Taskport
 
 struct ShellTests {
+    @Test @MainActor func terminationReapsZombieBeforeExitNotificationIsDelivered() throws {
+        let process = PTYProcess()
+        var exits: [Int32] = []
+        process.onExit = { exits.append($0) }
+        try process.start(directory: FileManager.default.temporaryDirectory.path,
+            arguments: ["/bin/sh", "-c", "exit 23"], environment: ["PATH": "/usr/bin:/bin"])
+        defer { process.terminate() }
+        let child = process.pid
+        // Keep the main queue occupied so the process source cannot deliver its exit event.
+        var info = siginfo_t()
+        for _ in 0..<100 {
+            let result = waitid(P_PID, UInt32(child), &info, WEXITED | WNOHANG | WNOWAIT)
+            #expect(result == 0)
+            if info.si_pid == child { break }
+            usleep(10_000)
+        }
+        #expect(info.si_pid == child)
+        #expect(process.pid == child)
+        process.terminate()
+        #expect(process.pid == 0)
+        #expect(exits == [23])
+        #expect(kill(child, 0) == -1 && errno == ESRCH)
+    }
+
+    @Test @MainActor func exitPollingDoesNotReapOrSignalLiveShells() async throws {
+        let process = PTYProcess()
+        var exits: [Int32] = []
+        process.onExit = { exits.append($0) }
+        try process.start(directory: FileManager.default.temporaryDirectory.path,
+            arguments: ["/bin/sh", "-c", "sleep 30"], environment: ["PATH": "/usr/bin:/bin"])
+        defer { process.terminate() }
+        let child = process.pid
+        var code: Int32 = -1
+        #expect(tp_reap(child, &code) == 0)
+        #expect(code == -1)
+        #expect(kill(child, 0) == 0)
+        #expect(process.pid == child)
+        #expect(exits.isEmpty)
+        process.terminate()
+        process.terminate()
+        try await waitUntil { process.pid == 0 }
+        #expect(exits.count == 1)
+        #expect(kill(child, 0) == -1 && errno == ESRCH)
+    }
+
     @Test @MainActor func retainedSurfaceReplaysViewportBeforeFirstAndReplacementShell() async throws {
         _ = NSApplication.shared
         let root = testDirectory("retained-viewport")

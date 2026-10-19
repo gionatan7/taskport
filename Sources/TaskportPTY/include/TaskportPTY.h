@@ -16,5 +16,6 @@ typedef struct {
 /// One read-only process snapshot for all owned sessions (IPv4 and IPv6 TCP listeners).
 int tp_listening_ports(const pid_t *sessions, int session_count, tp_listener *listeners, int capacity);
 /// Returns 1 when reaped, 0 while running, -1 on error. Exit uses shell-style 128+signal.
+/// Cleans up remaining owned-session children only after confirming the shell has exited.
 int tp_reap(pid_t child, int *exit_code);
 #endif

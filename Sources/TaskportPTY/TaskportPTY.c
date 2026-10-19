@@ -64,8 +64,21 @@ int tp_signal_session(pid_t session, int signal_number) {
 }
 
 int tp_reap(pid_t child, int *exit_code) {
+    if (child <= 1) { errno = EINVAL; return -1; }
+    // Confirm exit without releasing the PID before cleaning up its owned session.
+    siginfo_t info = {0};
+    int ready;
+    do {
+        ready = waitid(P_PID, (id_t)child, &info, WEXITED | WNOHANG | WNOWAIT);
+    } while (ready < 0 && errno == EINTR);
+    if (ready < 0) return -1;
+    if (info.si_pid == 0) return 0;
+    (void)tp_signal_session(child, SIGKILL);
     int status;
-    pid_t result = waitpid(child, &status, WNOHANG);
+    pid_t result;
+    do {
+        result = waitpid(child, &status, WNOHANG);
+    } while (result < 0 && errno == EINTR);
     if (result <= 0) return (int)result;
     *exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
     return 1;
