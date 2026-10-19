@@ -15,8 +15,13 @@ struct WorkspacePersistence {
         let document = try WorkspaceMigration.decode(Data(contentsOf: file))
         let projects = document.projects.map(\.id)
         let tasks = document.projects.flatMap(\.tasks).map(\.id)
-        guard Set(projects).count == projects.count, Set(tasks).count == tasks.count else {
+        let groups = document.groups.map(\.id)
+        guard Set(projects).count == projects.count, Set(tasks).count == tasks.count,
+              Set(groups).count == groups.count else {
             throw WorkspaceError("The workspace contains duplicate IDs. The saved file has not been changed.")
+        }
+        guard document.projects.allSatisfy({ $0.groupID.map(groups.contains) ?? true }) else {
+            throw WorkspaceError("A project's group is missing. The saved file has not been changed.")
         }
         return document
     }
@@ -26,12 +31,14 @@ struct WorkspacePersistence {
                                                attributes: [.posixPermissions: 0o700])
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        // Retain the private v1 snapshot before the first successful v2 write.
-        let backup = directory.appendingPathComponent("workspace-v1.json")
-        if FileManager.default.fileExists(atPath: file.path), !FileManager.default.fileExists(atPath: backup.path) {
+        // Keep the original schema recoverable before the first upgraded write.
+        if FileManager.default.fileExists(atPath: file.path) {
             let previous = try Data(contentsOf: file)
-            if let object = try JSONSerialization.jsonObject(with: previous) as? [String: Any], object["version"] as? Int == 1 {
-                guard FileManager.default.createFile(atPath: backup.path, contents: previous, attributes: [.posixPermissions: 0o600]) else {
+            if let object = try JSONSerialization.jsonObject(with: previous) as? [String: Any],
+               let version = object["version"] as? Int, version < document.version {
+                let backup = directory.appendingPathComponent("workspace-v\(version).json")
+                guard FileManager.default.fileExists(atPath: backup.path)
+                    || FileManager.default.createFile(atPath: backup.path, contents: previous, attributes: [.posixPermissions: 0o600]) else {
                     throw WorkspaceError("Couldn't back up the old workspace before migrating it.")
                 }
             }

@@ -113,7 +113,8 @@ final class WorkspaceStore {
     }
 
     @discardableResult
-    func addProject(name: String, directory: String, iconName: String? = nil) throws -> UUID {
+    func addProject(name: String, directory: String, iconName: String? = nil, groupID: UUID? = nil) throws -> UUID {
+        try validateGroup(groupID)
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw WorkspaceError("Enter a project name.") }
         let url = URL(fileURLWithPath: directory).resolvingSymlinksInPath().standardizedFileURL
@@ -124,8 +125,13 @@ final class WorkspaceStore {
         guard !document.projects.contains(where: { $0.directory == url.path }) else {
             throw WorkspaceError("This folder is already a project.")
         }
-        let project = Project(name: name, directory: url.path, iconName: iconName)
-        try commit { $0.projects.append(project); $0.selectedProjectID = project.id }
+        let project = Project(name: name, directory: url.path, iconName: iconName, groupID: groupID)
+        try commit { document in
+            document.projects.append(project)
+            document.selectedProjectID = project.id
+            if let group = document.groups.firstIndex(where: { $0.id == groupID }) { document.groups[group].isCollapsed = false }
+            else { document.projectsGroupCollapsed = false }
+        }
         return project.id
     }
 
@@ -135,11 +141,12 @@ final class WorkspaceStore {
         }
         if let original {
             guard previous.name == original.name, previous.directory == original.directory,
-                  previous.iconName == original.iconName else {
+                  previous.iconName == original.iconName, previous.groupID == original.groupID else {
                 throw WorkspaceError("This project changed while you were editing. Cancel and reopen it to load the latest version.")
             }
         }
         guard !project.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw WorkspaceError("Enter a project name.") }
+        try validateGroup(project.groupID)
         var updated = project
         if previous.directory != project.directory {
             var isDirectory: ObjCBool = false
@@ -164,6 +171,10 @@ final class WorkspaceStore {
             document.projects[index].name = updated.name
             document.projects[index].directory = updated.directory
             document.projects[index].iconName = updated.iconName
+            document.projects[index].groupID = updated.groupID
+            if let group = document.groups.firstIndex(where: { $0.id == updated.groupID }) {
+                document.groups[group].isCollapsed = false
+            } else { document.projectsGroupCollapsed = false }
         }
         // Keep surfaces/output, but discard cwd and environment from the old folder.
         // New starts wait for shell exit before opening a fresh shell in the new folder.
@@ -175,13 +186,16 @@ final class WorkspaceStore {
 
     func removeProject(_ id: UUID) throws {
         let owned = sessions.filter { $0.projectID == id }
-        guard !owned.contains(where: { $0.phase.isActive || $0.manualCommandRunning }) else {
-            throw WorkspaceError("Stop this project's tasks and terminal commands before removing it.")
+        let taskIDs = document.projects.first(where: { $0.id == id })?.tasks.map(\.id) ?? []
+        guard owned.allSatisfy(\.canStart) else {
+            throw WorkspaceError("Stop this project's tasks and terminal commands, and clear pending input before removing it.")
         }
         try commit {
             $0.projects.removeAll { $0.id == id }
             if $0.selectedProjectID == id { $0.selectedProjectID = $0.projects.first?.id }
+            $0.runningPinnedTaskIDs?.subtract(taskIDs)
         }
+        listeningPorts.removeValue(forKey: id)
         owned.forEach { $0.terminate() }
         // Keep terminating shells mounted until exit; their views have no selected project.
         Task { [weak self] in
@@ -379,7 +393,7 @@ final class WorkspaceStore {
         }
     }
 
-    private func commit(forceSave: Bool = false, _ update: (inout WorkspaceDocument) -> Void) throws {
+    func commit(forceSave: Bool = false, _ update: (inout WorkspaceDocument) -> Void) throws {
         guard !isReadOnly else { throw WorkspaceError("The saved workspace couldn't be read. Resolve that error before making changes.") }
         var next = document
         update(&next)

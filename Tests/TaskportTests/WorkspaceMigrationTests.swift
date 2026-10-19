@@ -18,7 +18,7 @@ struct WorkspaceMigrationTests {
         #expect(store.document == before)
         #expect(try Data(contentsOf: root.appendingPathComponent("workspace-v1.json")) == bytes)
         let saved = try JSONDecoder().decode(WorkspaceDocument.self, from: Data(contentsOf: persistence.file))
-        #expect(saved.version == 2)
+        #expect(saved.version == 3)
         #expect(saved == store.document)
     }
 
@@ -28,7 +28,7 @@ struct WorkspaceMigrationTests {
         let tunnel = ProjectTask(definition: TaskDefinition(name: "Tunnel", command: "cloudflared tunnel"), sourceKey: "builtin:cloudflare")
         let data = try legacyData([watch, jar, tunnel], address: "https://example.local:2443")
         let result = try WorkspaceMigration.decode(data)
-        #expect(result.version == 2)
+        #expect(result.version == 3)
         #expect(result.projects[0].linkedTasks.map(\.id) == [jar.id])
         #expect(result.projects[0].tasks[2].tunnelForTaskID == jar.id)
         #expect(result.projects[0].tasks[2].temporary)

@@ -6,10 +6,16 @@ public enum CLIArguments {
 
     taskport launch
     taskport status
+    taskport groups list
+    taskport groups add --name NAME
+    taskport groups edit GROUP_ID --name NAME
+    taskport groups remove GROUP_ID
     taskport projects list
-    taskport projects add --directory PATH [--name NAME]
-    taskport projects edit PROJECT_ID [--name NAME] [--directory PATH]
+    taskport projects add --directory PATH [--name NAME] [--group GROUP_ID]
+    taskport projects edit PROJECT_ID [--name NAME] [--directory PATH] [--group GROUP_ID|none]
+    taskport projects remove PROJECT_ID
     taskport tasks list PROJECT_ID
+    taskport tasks logs PROJECT_ID TASK_ID [--lines 100]
     taskport tasks add PROJECT_ID --name NAME --command COMMAND
       [--cwd DIRECTORY] [--kind service|oneOff] [--pinned true|false] [--env-file JSON_FILE]
       [--url URL] [--temporary true|false]
@@ -27,6 +33,12 @@ public enum CLIArguments {
     Poll tunnels status for tasks[0].remoteURL; tasks: [] means no tunnel exists.
 
     Task start/stop --all selects pinned long-running tasks only, never one-offs or tunnels.
+    Group removal keeps its projects, tasks, and files; projects become ungrouped.
+    Project removal deletes only Taskport's saved entry and task definitions, never files.
+    Stop tasks and manual commands and clear unfinished input before removing a project.
+    tasks logs returns output and outputTruncated, capturing up to 128 KiB in memory per
+    terminal since this app launch. --lines accepts 1–1000 (default 100). ANSI controls
+    are omitted. Output may contain secrets; do not publish it. No disk log or stdin access.
     sessions list shows active tasks/manual commands; --all also includes idle open shells.
     ports list returns sorted unique TCP listening ports visible to your user (IPv4/IPv6),
     including non-Taskport servers. It works without the app running. This is a snapshot,
@@ -79,7 +91,15 @@ public enum CLIArguments {
         }
         guard positional.count >= 2 else { throw ControlError("Specify an operation; run taskport help.") }
         let operation = noun + "." + positional[1]
-        let projectOperations = ["projects.edit", "tasks.list", "tasks.add", "tasks.edit", "tasks.start", "tasks.stop", "tunnels.start", "tunnels.status", "tunnels.stop"]
+        if noun == "groups" {
+            if ["groups.list", "groups.add"].contains(operation), positional.count == 2 {
+                return ControlRequest(operation: operation, values: values, flags: flags)
+            }
+            guard ["groups.edit", "groups.remove"].contains(operation), positional.count == 3,
+                  let groupID = UUID(uuidString: positional[2]) else { throw ControlError("Use a group UUID from groups list; run taskport help.") }
+            return ControlRequest(operation: operation, values: values, flags: flags, groupID: groupID)
+        }
+        let projectOperations = ["projects.edit", "projects.remove", "tasks.list", "tasks.logs", "tasks.add", "tasks.edit", "tasks.start", "tasks.stop", "tunnels.start", "tunnels.status", "tunnels.stop"]
         var projectID: UUID?
         var taskIDs: [UUID] = []
         if projectOperations.contains(operation) {
@@ -89,7 +109,7 @@ public enum CLIArguments {
                 guard let id = UUID(uuidString: $0) else { throw ControlError("Use task UUIDs from tasks list.") }
                 return id
             }
-            if operation == "tasks.edit" || operation.hasPrefix("tunnels.") {
+            if ["tasks.edit", "tasks.logs"].contains(operation) || operation.hasPrefix("tunnels.") {
                 guard taskIDs.count == 1 else { throw ControlError("This operation requires exactly one task ID.") }
             } else if !["tasks.start", "tasks.stop"].contains(operation), !taskIDs.isEmpty {
                 throw ControlError("Unexpected extra IDs.")

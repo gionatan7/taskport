@@ -9,12 +9,32 @@ import TaskportControl
         do {
             try validateOptions(request)
             var response = ControlResponse()
+            if ["groups.list", "projects.list", "status"].contains(request.operation) {
+                response.groups = store.document.groups.map { group in
+                    GroupInfo(id: group.id, name: group.name, isCollapsed: group.isCollapsed,
+                        projectCount: store.document.projects.filter { $0.groupID == group.id }.count)
+                }
+                if request.operation == "groups.list" { return response }
+            }
+            if request.operation == "groups.add" {
+                response.groupID = try store.saveGroup(name: required("name", in: request))
+                return response
+            }
+            if ["groups.edit", "groups.remove"].contains(request.operation) {
+                guard let group = store.document.groups.first(where: { $0.id == request.groupID }) else {
+                    throw WorkspaceError("Group ID not found. Run groups list first.")
+                }
+                response.groupID = group.id
+                if request.operation == "groups.edit" { try store.saveGroup(name: required("name", in: request), replacing: group) }
+                else { try store.removeGroup(group.id) }
+                return response
+            }
             if request.operation == "projects.list" || request.operation == "status" {
                 response.projects = store.document.projects.map { project in
                     ProjectInfo(id: project.id, name: project.name, directory: project.directory,
                         status: String(describing: store.status(of: project)),
                         taskCount: project.tasks.count, runningCount: store.runningCount(in: project),
-                        listeningPorts: store.listeningPorts[project.id] ?? [])
+                        listeningPorts: store.listeningPorts[project.id] ?? [], groupID: project.groupID)
                 }
                 if request.operation == "status" { response.tasks = allTasks() }
                 return response
@@ -29,7 +49,7 @@ import TaskportControl
             if request.operation == "projects.add" {
                 let directory = try required("directory", in: request)
                 response.projectID = try store.addProject(name: request.values["name"] ?? URL(fileURLWithPath: directory).lastPathComponent,
-                    directory: directory)
+                    directory: directory, groupID: groupID(in: request))
                 return response
             }
             guard let projectID = request.projectID,
@@ -55,8 +75,23 @@ import TaskportControl
             case "projects.edit":
                 if let name = request.values["name"] { project.name = name }
                 if let directory = request.values["directory"] { project.directory = directory }
+                if request.values["group"] != nil { project.groupID = try groupID(in: request) }
                 try store.updateProject(project)
+            case "projects.remove":
+                guard request.taskIDs.isEmpty else { throw WorkspaceError("Project removal does not accept task IDs.") }
+                try store.removeProject(project.id)
             case "tasks.list": response.tasks = project.tasks.map { taskInfo($0, project: project) }
+            case "tasks.logs":
+                guard request.taskIDs.count == 1, let task = project.tasks.first(where: { $0.id == request.taskIDs[0] }) else {
+                    throw WorkspaceError("Specify one task ID from this project.")
+                }
+                guard let lines = Int(request.values["lines"] ?? "100"), (1...1000).contains(lines) else {
+                    throw WorkspaceError("Use --lines between 1 and 1000.")
+                }
+                let snapshot = store.session(task.id)?.output.tail(lines: lines)
+                response.taskID = task.id
+                response.output = snapshot?.text ?? ""
+                response.outputTruncated = snapshot?.truncated ?? false
             case "tasks.add", "tasks.edit":
                 var task = ProjectTask(definition: TaskDefinition())
                 if request.operation == "tasks.edit" {
@@ -165,13 +200,22 @@ import TaskportControl
         return value
     }
 
+    private func groupID(in request: ControlRequest) throws -> UUID? {
+        guard let value = request.values["group"], value != "none" else { return nil }
+        guard let id = UUID(uuidString: value) else { throw WorkspaceError("Use --group with a group UUID, or none.") }
+        return id
+    }
+
     private func validateOptions(_ request: ControlRequest) throws {
         let allowed: Set<String>
         var flags: Set<String> = []
         switch request.operation {
         case "tunnels.start": allowed = ["confirm-public-url"]
         case "tunnels.status", "tunnels.stop": allowed = []
-        case "projects.add", "projects.edit": allowed = ["name", "directory"]
+        case "projects.add", "projects.edit": allowed = ["name", "directory", "group"]
+        case "groups.add", "groups.edit": allowed = ["name"]
+        case "groups.list", "groups.remove", "projects.remove": allowed = []
+        case "tasks.logs": allowed = ["lines"]
         case "tasks.add", "tasks.edit": allowed = ["name", "command", "cwd", "kind", "pinned", "environment", "url", "temporary"]; flags = ["confirm-local-override"]
         case "tasks.start", "tasks.stop", "sessions.list": allowed = []; flags = ["all"]
         case "tasks.list", "projects.list", "status": allowed = []

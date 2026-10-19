@@ -1,10 +1,10 @@
 import Foundation
 
-/// One-way conversion of project URLs to task metadata. Never executes project commands.
+/// One-way workspace upgrades. Never executes project commands.
 enum WorkspaceMigration {
     static func decode(_ data: Data) throws -> WorkspaceDocument {
         guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let version = object["version"] as? Int, [1, 2].contains(version) else {
+              let version = object["version"] as? Int, [1, 2, 3].contains(version) else {
             throw WorkspaceError("Unsupported workspace version. The saved file has not been changed.")
         }
         if version == 1 {
@@ -32,6 +32,10 @@ enum WorkspaceMigration {
             }
             object["projects"] = projects
             object["version"] = 2
+        }
+        if version < 3 {
+            object["groups"] = []
+            object["version"] = 3
         }
         return try JSONDecoder().decode(WorkspaceDocument.self, from: JSONSerialization.data(withJSONObject: object))
     }

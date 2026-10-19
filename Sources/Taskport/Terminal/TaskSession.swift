@@ -50,6 +50,7 @@ final class TaskSession: Identifiable {
     @ObservationIgnored private var preservePhaseOnExit = false
     @ObservationIgnored private var isTunnel = false
     @ObservationIgnored var onShellExit: (() -> Void)?
+    @ObservationIgnored private(set) var output = TerminalOutput()
 
     init(taskID: UUID, projectID: UUID, dataDirectory: URL,
          pasteConfirmation: TerminalPasteConfirmation = TerminalPasteConfirmation()) {
@@ -211,6 +212,7 @@ final class TaskSession: Identifiable {
     }
 
     private func receive(_ data: Data) {
+        output.append(data)
         let parsed = parser.consume(data)
         if !parsed.output.isEmpty {
             bridge.receive(parsed.output)

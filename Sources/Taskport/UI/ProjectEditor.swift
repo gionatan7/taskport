@@ -7,16 +7,18 @@ struct ProjectEditor: View {
     @State private var name: String
     @State private var directory: String
     @State private var iconName: String
+    @State private var groupID: UUID?
     @State private var showIcons = false
     @State private var error: String?
     @FocusState private var focusName: Bool
 
-    init(store: WorkspaceStore, project: Project? = nil) {
+    init(store: WorkspaceStore, project: Project? = nil, groupID: UUID? = nil) {
         self.store = store
         self.project = project
         _name = State(initialValue: project?.name ?? "")
         _directory = State(initialValue: project?.directory ?? "")
         _iconName = State(initialValue: project?.iconName ?? "folder")
+        _groupID = State(initialValue: project?.groupID ?? groupID)
     }
 
     var body: some View {
@@ -38,6 +40,12 @@ struct ProjectEditor: View {
                     .popover(isPresented: $showIcons) {
                         ProjectIconPicker(selection: $iconName) { showIcons = false }
                     }
+                }
+                Picker("Group", selection: $groupID) {
+                    ForEach(store.document.groups) { group in
+                        Text(group.name).tag(Optional(group.id))
+                    }
+                    Text("Projects").tag(nil as UUID?)
                 }
             }
             Divider()
@@ -110,8 +118,9 @@ struct ProjectEditor: View {
                 updated.name = name
                 updated.directory = directory
                 updated.iconName = iconName
+                updated.groupID = groupID
                 try store.updateProject(updated, replacing: project)
-            } else { try store.addProject(name: name, directory: directory, iconName: iconName) }
+            } else { try store.addProject(name: name, directory: directory, iconName: iconName, groupID: groupID) }
             dismiss()
         } catch { self.error = error.localizedDescription }
     }

@@ -12,4 +12,9 @@
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSAppleEventsUsageDescription</key><string>Taskport opens a Ghostty tab in your project directory when you choose Open in Ghostty.</string>
+    <key>UTExportedTypeDeclarations</key><array><dict>
+        <key>UTTypeIdentifier</key><string>app.taskport.project-group</string>
+        <key>UTTypeDescription</key><string>Taskport project group</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    </dict></array>
 </dict></plist>

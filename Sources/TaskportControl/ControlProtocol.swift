@@ -3,13 +3,15 @@ import Foundation
 public struct ControlRequest: Codable, Sendable {
     public var operation: String
     public var projectID: UUID?
+    public var groupID: UUID?
     public var taskIDs: [UUID]
     public var values: [String: String]
     public var flags: Set<String>
     public init(operation: String, projectID: UUID? = nil, taskIDs: [UUID] = [],
-                values: [String: String] = [:], flags: Set<String> = []) {
+                values: [String: String] = [:], flags: Set<String> = [], groupID: UUID? = nil) {
         self.operation = operation; self.projectID = projectID; self.taskIDs = taskIDs
         self.values = values; self.flags = flags
+        self.groupID = groupID
     }
 }
 
@@ -17,14 +19,28 @@ public struct ControlResponse: Codable, Sendable {
     public var ok = true
     public var error: String?
     public var projects: [ProjectInfo]?
+    public var groups: [GroupInfo]?
     public var tasks: [TaskInfo]?
     public var results: [ActionResult]?
     public var ports: [Int]?
     public var projectID: UUID?
     public var taskID: UUID?
+    public var groupID: UUID?
+    public var output: String?
+    public var outputTruncated: Bool?
     public init() {}
     public static func failure(_ message: String) -> Self {
         var response = Self(); response.ok = false; response.error = message; return response
+    }
+}
+
+public struct GroupInfo: Codable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let isCollapsed: Bool
+    public let projectCount: Int
+    public init(id: UUID, name: String, isCollapsed: Bool, projectCount: Int) {
+        self.id = id; self.name = name; self.isCollapsed = isCollapsed; self.projectCount = projectCount
     }
 }
 
@@ -33,10 +49,12 @@ public struct ProjectInfo: Codable, Sendable {
     public let name, directory, status: String
     public let taskCount, runningCount: Int
     public let listeningPorts: [Int]
-    public init(id: UUID, name: String, directory: String, status: String, taskCount: Int, runningCount: Int, listeningPorts: [Int] = []) {
+    public let groupID: UUID?
+    public init(id: UUID, name: String, directory: String, status: String, taskCount: Int, runningCount: Int, listeningPorts: [Int] = [], groupID: UUID? = nil) {
         self.id = id; self.name = name; self.directory = directory
         self.status = status; self.taskCount = taskCount; self.runningCount = runningCount
         self.listeningPorts = listeningPorts
+        self.groupID = groupID
     }
 }
 

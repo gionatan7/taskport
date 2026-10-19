@@ -54,6 +54,7 @@ struct Project: Codable, Identifiable, Equatable {
     var name: String
     var directory: String
     var iconName: String?
+    var groupID: UUID?
     var tasks: [ProjectTask] = []
     var selectedTaskID: UUID?
     var split: PaneSplit?
@@ -64,6 +65,12 @@ struct Project: Codable, Identifiable, Equatable {
         if path.hasPrefix("/") { return URL(fileURLWithPath: path).standardizedFileURL }
         return URL(fileURLWithPath: directory).appendingPathComponent(path).standardizedFileURL
     }
+}
+
+struct ProjectGroup: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name: String
+    var isCollapsed = false
 }
 
 enum PaneAxis: String, Codable, CaseIterable {
@@ -77,8 +84,10 @@ struct PaneSplit: Codable, Equatable {
 }
 
 struct WorkspaceDocument: Codable, Equatable {
-    var version = 2
+    var version = 3
     var projects: [Project] = []
+    var groups: [ProjectGroup] = []
+    var projectsGroupCollapsed: Bool?
     var selectedProjectID: UUID?
     var runningPinnedTaskIDs: Set<UUID>?
     var resumeTasksOnLaunch: Bool?
