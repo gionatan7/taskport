@@ -40,6 +40,7 @@ struct WorkspaceView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
+            .background(.bar, ignoresSafeAreaEdges: .top)
             .overlay(alignment: .top) { TunnelCopyToast(store: store) }
             .navigationTitle(store.selectedProject?.name ?? "Taskport")
             .toolbar {
@@ -71,6 +72,7 @@ struct WorkspaceView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .task {
             while !Task.isCancelled {
                 await store.refreshListeningPorts()
