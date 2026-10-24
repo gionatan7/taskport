@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import TaskportControl
 
 /// Single writer for saved definitions. Runtime sessions are deliberately not Codable.
 @MainActor @Observable
@@ -12,6 +13,11 @@ final class WorkspaceStore {
     private var closingTabIDs: Set<UUID> = []
     private var openTabIDs: Set<UUID> = []
     private(set) var preservingResumeState = false
+    private(set) var shutdownInProgress = false
+    var restoreID: UUID?
+    var restoreInProgress = false
+    var restoreResults: [ActionResult] = []
+    var restoreError: String?
     var errorMessage: String?
     var tunnelCopyNotice: UUID?
     var pendingTunnelCopies: Set<UUID> = []
@@ -280,6 +286,7 @@ final class WorkspaceStore {
     }
 
     func startTask(_ taskID: UUID, projectID: UUID, activate: Bool = true) throws {
+        guard !shutdownInProgress else { throw WorkspaceError("Taskport is shutting down. No new tasks were started.") }
         guard !closingTabIDs.contains(taskID) else { throw WorkspaceError("This terminal is still closing. Try again when it has stopped.") }
         guard !isReadOnly else { throw WorkspaceError("This workspace is read-only. Resolve its startup error before running tasks.") }
         guard let project = document.projects.first(where: { $0.id == projectID }),
@@ -314,26 +321,36 @@ final class WorkspaceStore {
     func terminateAll() { sessions.forEach { $0.terminate() } }
 
     /// Freeze the last running set before shutdown changes sessions to stopping/exited.
-    func prepareToQuit() {
+    func prepareToQuit(forRestore: Bool = false) {
         recordRunningPinnedTasks()
         preservingResumeState = true
+        shutdownInProgress = !forRestore
     }
 
     func cancelQuit() {
+        shutdownInProgress = false
         preservingResumeState = false
         recordRunningPinnedTasks()
     }
 
     /// Called only after acquiring the workspace's exclusive control lock.
-    func resumePinnedTasks() {
-        guard !isReadOnly else { return }
+    func resumePinnedTasks(restoring handoffID: UUID? = nil) {
+        restoreID = handoffID
+        guard !isReadOnly else {
+            if handoffID != nil { restoreError = errorMessage ?? "The workspace is read-only." }
+            return
+        }
         // Initialization may predate another owner's final write. Re-read only once
         // this app owns the control lock, before any startup cleanup or task launch.
         do { document = try persistence.load() }
         catch {
             blockWrites("Couldn't reload the saved workspace. Nothing has been overwritten. \(error.localizedDescription)")
+            if handoffID != nil { restoreError = errorMessage }
             return
         }
+        if let handoffID { restoreSession(handoffID); return }
+        do { try SessionHandoff.discard(in: persistence.directory) }
+        catch { errorMessage = error.localizedDescription; return }
         let saved = document.runningPinnedTaskIDs ?? []
         do {
             // This one startup checkpoint also persists a v1 migration and its backup,
@@ -358,6 +375,10 @@ final class WorkspaceStore {
                 perform { try startTask(task.id, projectID: project.id, activate: false) }
             }
         }
+    }
+
+    func restoreOpenTabs(_ ids: Set<UUID>) {
+        openTabIDs = ids.intersection(document.projects.flatMap(\.tasks).map(\.id))
     }
 
     private func recordRunningPinnedTasks() {
@@ -394,6 +415,7 @@ final class WorkspaceStore {
     }
 
     func commit(forceSave: Bool = false, _ update: (inout WorkspaceDocument) -> Void) throws {
+        guard !shutdownInProgress else { throw WorkspaceError("Taskport is shutting down. No settings were changed.") }
         guard !isReadOnly else { throw WorkspaceError("The saved workspace couldn't be read. Resolve that error before making changes.") }
         var next = document
         update(&next)

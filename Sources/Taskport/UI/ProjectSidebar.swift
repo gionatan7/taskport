@@ -34,14 +34,14 @@ struct ProjectSidebar: View {
                     if !group.isCollapsed { groupProjects(group.id) }
                 }
             }
-            Group {
+            if !store.document.groups.isEmpty {
                 ProjectGroupHeading(group: nil, store: store)
                     .contextMenu {
                         Button("Add project…", systemImage: "plus") { sheet = .addProject(nil) }
                             .disabled(store.isReadOnly)
                     }
-                if store.document.projectsGroupCollapsed != true { groupProjects(nil) }
             }
+            if store.document.groups.isEmpty || store.document.projectsGroupCollapsed != true { groupProjects(nil) }
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
@@ -91,6 +91,7 @@ struct ProjectSidebar: View {
         projectRows(in: groupID)
         if !store.document.projects.contains(where: { $0.groupID == groupID }) {
             Button("Add project…", systemImage: "plus") { sheet = .addProject(groupID) }
+                .padding(.leading, store.document.groups.isEmpty ? 0 : 16)
                 .disabled(store.isReadOnly)
         }
     }
@@ -99,6 +100,7 @@ struct ProjectSidebar: View {
         let projects = store.document.projects.filter { $0.groupID == groupID }
         return ForEach(projects) { project in
             ProjectRow(project: project, store: store)
+                .padding(.leading, store.document.groups.isEmpty ? 0 : 16)
                 .tag(project.id)
                 .contextMenu {
                     Button("Start all", systemImage: "play.fill") { store.runAll(in: project) }

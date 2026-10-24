@@ -1,7 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 taskport_root="$(cd "$(dirname "$0")/.." && pwd)"
-if [[ "$#" != 1 || -z "$1" ]]; then echo 'Usage: bash scripts/install.sh APP_BUNDLE' >&2; exit 2; fi
+taskport_check=false
+if [[ "$#" == 2 && "$1" == --check ]]; then taskport_check=true; shift; fi
+if [[ "$#" != 1 || -z "$1" ]]; then echo 'Usage: bash scripts/install.sh [--check] APP_BUNDLE' >&2; exit 2; fi
 taskport_source="$1"
 taskport_destination="/Applications/Taskport.app"
 if [[ "$taskport_source" == "$taskport_destination" ]]; then
@@ -9,6 +11,7 @@ if [[ "$taskport_source" == "$taskport_destination" ]]; then
   exit 1
 fi
 
+if [[ "$taskport_check" == false ]]; then
 if pgrep -x Taskport >/dev/null; then
   echo 'Quit all Taskport instances before installing. Running tasks will not be stopped automatically.' >&2
   exit 1
@@ -18,6 +21,7 @@ else
     echo 'Cannot verify whether Taskport is running. Check process-access permissions.' >&2
     exit 1
   fi
+fi
 fi
 
 for taskport_bundle in "$taskport_source" "$taskport_destination"; do
@@ -38,6 +42,14 @@ taskport_backup="$taskport_root/build/Taskport.previous"
 if [[ -e "$taskport_backup" || -L "$taskport_backup" ]]; then
   echo "A previous installation backup exists at $taskport_backup; inspect it before retrying." >&2
   exit 1
+fi
+if [[ ! -w /Applications || ( -e "$taskport_destination" && ! -w "$taskport_destination" ) ]]; then
+  echo 'Installation needs write access to /Applications/Taskport.app. Request execution approval before stopping tasks.' >&2
+  exit 1
+fi
+if [[ "$taskport_check" == true ]]; then
+  echo 'Installation preflight passed; no app or tasks were changed.'
+  exit 0
 fi
 if [[ -e "$taskport_destination" ]]; then mv "$taskport_destination" "$taskport_backup"; fi
 if mv "$taskport_source" "$taskport_destination"; then

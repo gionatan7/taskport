@@ -32,6 +32,8 @@ bash scripts/swift.sh test
 bash scripts/build.sh --check
 ```
 
+For an authorized development update while Taskport is running, use `bash scripts/build.sh --restore`. It builds first, then saves the active session, quits, installs, and restores previously running services, including unpinned and temporary tasks. The installed version must already support restore. Manual terminal work blocks it; active one-offs and tunnels need explicit opt-ins. See [CLI session restore](docs/cli.md#session-restore) for limitations and recovery.
+
 Packaging remaps compiler paths, strips debug/local symbols, and ad-hoc signs the app. Staging is cleaned afterward. Privacy scans are separate manual audits, not build steps; Bun is not needed to build. Ad-hoc signing and a successful build do not make a distributable release.
 
 To prepare a **local binary candidate without installing or launching it**, run `bash scripts/prepare-release.sh`. This requires Bun and Python 3 for the privacy and ZIP audits. It produces an Apple silicon ZIP and SHA-256 checksum under ignored `build/release-candidate/`, scans local identity markers without reporting their values, excludes filesystem metadata, and verifies the extracted app. It refuses to overwrite an existing candidate. `bash scripts/build.sh --package OUTPUT_APP` is the lower-level packaging-only mode and does not run privacy scans. See [publication checks](docs/public-source.md) for the release checklist and privacy limitations.

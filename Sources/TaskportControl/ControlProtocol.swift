@@ -28,6 +28,9 @@ public struct ControlResponse: Codable, Sendable {
     public var groupID: UUID?
     public var output: String?
     public var outputTruncated: Bool?
+    public var handoffID: UUID?
+    public var processID: Int32?
+    public var state: String?
     public init() {}
     public static func failure(_ message: String) -> Self {
         var response = Self(); response.ok = false; response.error = message; return response

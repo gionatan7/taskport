@@ -14,7 +14,7 @@ Projects have stable IDs, directories, icons, tasks, and saved pane selection/la
 
 `WorkspaceStore` is the single writer; UI and CLI mutations run on its main actor. Definitions/layouts are versioned JSON in private Application Support, not in the checkout. Runtime sessions and scrollback are not serialized. Startup reacquires an exclusive workspace lock and reloads the authoritative file before cleanup, migration, or resume. Lock/load errors make the store read-only rather than overwriting data. Unchanged saves are skipped, while migration checkpoints and private backups still persist.
 
-Resume is a saved intent to start fresh processes, not daemon/session restoration. It is enabled by default for previously running pinned services; explicit stops clear those IDs. One-offs, unpinned services, temporary tasks, and tunnels never resume. See [runtime privacy](public-source.md#runtime-privacy-and-trust).
+Normal resume is a saved intent to start fresh processes, not daemon/session restoration. It is enabled by default for previously running pinned services; explicit stops clear those IDs. One-offs, unpinned services, temporary tasks, and tunnels do not automatically resume. Explicit [CLI session restore](cli.md#session-restore) instead uses a private one-time checkpoint, including previously active unpinned/temporary services and separately authorized one-offs/tunnels. See [runtime privacy](public-source.md#runtime-privacy-and-trust).
 
 ## Import boundaries
 

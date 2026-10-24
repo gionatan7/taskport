@@ -4,6 +4,8 @@ taskport_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$taskport_root"
 taskport_check=false
 taskport_package=
+taskport_restore=false
+taskport_restore_flags=()
 if [[ "$#" == 1 && "$1" == --check ]]; then
   taskport_check=true
 elif [[ "$#" == 2 && "$1" == --package && -n "$2" ]]; then
@@ -13,8 +15,17 @@ elif [[ "$#" == 2 && "$1" == --package && -n "$2" ]]; then
     echo 'The package destination already exists; choose a fresh path.' >&2
     exit 1
   fi
+elif [[ "$#" -ge 1 && "$1" == --restore ]]; then
+  taskport_restore=true
+  shift
+  for taskport_flag in "$@"; do
+    case "$taskport_flag" in
+      --include-one-offs|--include-tunnels) taskport_restore_flags+=("$taskport_flag") ;;
+      *) echo 'Unsupported restore option; use --include-one-offs or --include-tunnels.' >&2; exit 2 ;;
+    esac
+  done
 elif [[ "$#" != 0 ]]; then
-  echo 'Usage: bash scripts/build.sh [--check | --package OUTPUT_APP]' >&2
+  echo 'Usage: bash scripts/build.sh [--check | --package OUTPUT_APP | --restore [--include-one-offs] [--include-tunnels]]' >&2
   exit 2
 fi
 bash scripts/check-toolchain.sh
@@ -61,5 +72,13 @@ elif [[ -n "$taskport_package" ]]; then
   mv "$taskport_app" "$taskport_package"
   echo 'Packaged app verified; the installed app and running tasks were not changed.'
 else
+  if [[ "$taskport_restore" == true ]]; then
+    # Finish compilation/signing/preflight first, then keep the interruption short.
+    bash scripts/install.sh --check "$taskport_app"
+    "$taskport_app/Contents/MacOS/taskport-cli" quit --save-session ${taskport_restore_flags[@]+"${taskport_restore_flags[@]}"}
+  fi
   bash scripts/install.sh "$taskport_app"
+  if [[ "$taskport_restore" == true ]]; then
+    /Applications/Taskport.app/Contents/MacOS/taskport-cli launch --restore
+  fi
 fi

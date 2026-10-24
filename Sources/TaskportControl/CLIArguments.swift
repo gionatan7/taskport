@@ -4,7 +4,10 @@ public enum CLIArguments {
     public static let help = """
     Taskport — local project/task control (JSON output)
 
-    taskport launch
+    taskport launch [--restore]
+    taskport restart --restore [--include-one-offs] [--include-tunnels]
+    taskport quit --save-session [--include-one-offs] [--include-tunnels]
+    taskport restore status
     taskport status
     taskport groups list
     taskport groups add --name NAME
@@ -52,11 +55,20 @@ public enum CLIArguments {
     new folder; absolute task paths stay unchanged. Files and imports are not moved.
     --env-file replaces the task's environment overrides with a JSON string dictionary.
     URLs belong to tasks, not projects. Use --url '' to clear one.
-    Temporary tasks cannot be pinned or resumed; they are removed after stop/success.
+    Temporary tasks cannot be pinned; they are removed after stop/success.
     Failures remain until closed or explicitly stopped. A missing temporary task ID after
     stop means removal completed; recreate it if needed rather than restarting that ID.
     Task output includes localURL, temporary, tunnelForTaskID, and active remoteURL.
     Imported edits change only Taskport's copy; explain the notice before confirming.
+    Explicit restore restarts only previously starting/running tasks, including unpinned
+    and temporary services, once, regardless of the normal resume setting. Commands start
+    from the beginning; process memory and terminal output/input are not preserved.
+    Manual commands/unfinished input block shutdown. Active one-offs and tunnels block
+    unless explicitly included: one-offs run again, tunnel URLs can change. Already-stopping
+    tasks are skipped. A private saved session expires after 24 hours and is consumed before
+    execution. A normal launch discards it and uses the normal pinned-task resume setting.
+    quit --save-session waits for app exit; launch --restore waits for per-task results.
+    restore status inspects that launch's result. Failed restores are not retried automatically.
     Exit: 0 success, 1 operation/partial failure, 2 usage/connection/inspection failure.
     A connection timeout after submission has an unknown outcome: inspect status, don't
     blindly retry a mutation. No automatic retries or automatic app launch.
@@ -69,7 +81,8 @@ public enum CLIArguments {
             let argument = arguments[index]
             if argument.hasPrefix("--") {
                 let key = String(argument.dropFirst(2))
-                if ["all", "confirm-local-override", "json"].contains(key) {
+                if ["all", "confirm-local-override", "json", "restore", "save-session", "include-one-offs", "include-tunnels"].contains(key) {
+                    guard !flags.contains(key) else { throw ControlError("Duplicate option \(argument).") }
                     if key != "json" { flags.insert(key) }
                 } else {
                     guard index + 1 < arguments.count, values[key] == nil else { throw ControlError("Missing or duplicate value for \(argument).") }
@@ -79,6 +92,17 @@ public enum CLIArguments {
             index += 1
         }
         guard let noun = positional.first else { throw ControlError("Run taskport help for commands.") }
+        if ["launch", "quit", "restart"].contains(noun) {
+            let required: Set<String> = noun == "quit" ? ["save-session"] : noun == "restart" ? ["restore"] : []
+            let allowed: Set<String> = noun == "launch" ? ["restore"] : required.union(["include-one-offs", "include-tunnels"])
+            guard positional.count == 1, values.isEmpty, required.isSubset(of: flags), flags.isSubset(of: allowed) else {
+                throw ControlError("Usage: taskport launch [--restore], restart --restore, or quit --save-session. See help for opt-ins.")
+            }
+            return ControlRequest(operation: "app.\(noun)", flags: flags)
+        }
+        if positional == ["restore", "status"], values.isEmpty, flags.isEmpty {
+            return ControlRequest(operation: "app.restore-status")
+        }
         if noun == "ports" {
             guard positional == ["ports", "list"], values.isEmpty, flags.isEmpty else {
                 throw ControlError("Usage: taskport ports list")

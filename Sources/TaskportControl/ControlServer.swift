@@ -9,7 +9,8 @@ import Foundation
     private let directory: URL
     public init(directory: URL) { self.directory = directory }
 
-    public func start(handler: @escaping @MainActor @Sendable (ControlRequest) -> ControlResponse) throws {
+    public func start(afterResponse: (@MainActor @Sendable (ControlRequest, ControlResponse, Bool) -> Void)? = nil,
+                      handler: @escaping @MainActor @Sendable (ControlRequest) -> ControlResponse) throws {
         guard source == nil else { return }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])
@@ -45,7 +46,7 @@ import Foundation
             _ = fcntl(fd, F_SETFD, FD_CLOEXEC)
             let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
             source.setEventHandler { [weak self] in
-                MainActor.assumeIsolated { self?.acceptClients(fd, handler: handler) }
+                MainActor.assumeIsolated { self?.acceptClients(fd, afterResponse: afterResponse, handler: handler) }
             }
             source.setCancelHandler { close(fd) }
             self.source = source
@@ -58,7 +59,9 @@ import Foundation
         }
     }
 
-    private func acceptClients(_ listener: Int32, handler: @escaping @MainActor @Sendable (ControlRequest) -> ControlResponse) {
+    private func acceptClients(_ listener: Int32,
+                               afterResponse: (@MainActor @Sendable (ControlRequest, ControlResponse, Bool) -> Void)?,
+                               handler: @escaping @MainActor @Sendable (ControlRequest) -> ControlResponse) {
         while true {
             let fd = accept(listener, nil, nil)
             guard fd >= 0 else { return }
@@ -69,6 +72,8 @@ import Foundation
             _ = fcntl(fd, F_SETFL, 0)
             Task.detached { [weak self] in
                 defer { close(fd) }
+                var submitted: (ControlRequest, ControlResponse)?
+                var sent = false
                 do {
                     try LocalSocket.verifyPeer(fd)
                     let data = try LocalSocket.readMessage(fd)
@@ -76,9 +81,12 @@ import Foundation
                     do {
                         let request = try JSONDecoder().decode(ControlRequest.self, from: data)
                         response = await handler(request)
+                        submitted = (request, response)
                     } catch { response = .failure("Invalid control request JSON.") }
                     try LocalSocket.writeMessage(JSONEncoder().encode(response), to: fd)
+                    sent = true
                 } catch { /* Broken clients cannot affect the app or another request. */ }
+                if let (request, response) = submitted { await afterResponse?(request, response, sent) }
                 await self?.finishedClient()
             }
         }

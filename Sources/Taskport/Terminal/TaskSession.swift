@@ -35,6 +35,8 @@ final class TaskSession: Identifiable {
     private(set) var shellPID: Int32 = 0
     private(set) var remoteURL: URL?
     private(set) var stopWasRequested = false
+    private(set) var startedDefinition: TaskDefinition?
+    private(set) var startedDirectory: String?
     @ObservationIgnored private var process: PTYProcess?
     @ObservationIgnored private var bridge: InMemoryTerminalSession!
     @ObservationIgnored private var lastViewport: InMemoryTerminalViewport?
@@ -111,6 +113,8 @@ final class TaskSession: Identifiable {
             throw WorkspaceError("The task's working directory is unavailable. Edit the task or reconnect the folder.")
         }
         stopWasRequested = false
+        startedDefinition = task.definition
+        startedDirectory = directory
         isTerminating = false
         setPhase(.starting)
         isTunnel = task.sourceKey == "builtin:cloudflare"
