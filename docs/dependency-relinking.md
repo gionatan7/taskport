@@ -1,8 +1,8 @@
 # Taskport source and libintl relinking materials
 
-Distribute `Taskport-0.0.1-source-relink.tar.gz` and its checksum beside the matching app ZIP, with the same free access. GitHub's automatic source archive alone omits the dependency sources and relinking library provided here.
+Distribute `Taskport-0.1.0-source-relink.tar.gz` and its checksum beside the matching app ZIP, with the same free access. GitHub's automatic source archive alone omits the dependency sources and relinking library provided here.
 
-The archive includes Taskport's working source and build scripts, both pinned Swift packages, the exact Ghostty source and producer patches, the fetched Zig dependency source graph, complete gettext 0.24 and z2d source, and Zig's runtime/library sources. Upstream licenses, notices, and source headers remain intact. `SOURCE-MANIFEST.json` records the original download hashes and package revisions. Taskport is GPL-3.0-only; third-party components retain their listed licenses.
+The archive includes Taskport's working source and build scripts, all pinned Swift packages (including Sparkle's exact framework and source), the exact Ghostty source and producer patches, the fetched Zig dependency source graph, complete gettext 0.24 and z2d source, and Zig's runtime/library sources. Upstream licenses, notices, and source headers remain intact. `SOURCE-MANIFEST.json` records the original download hashes and package revisions. Taskport is GPL-3.0-only; third-party components retain their listed licenses.
 
 ## Rebuild Taskport with a modified libintl
 

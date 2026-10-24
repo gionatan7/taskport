@@ -2,7 +2,7 @@
 
 A native macOS workspace for project tasks, with interactive Ghostty terminals.
 
-Taskport is an experimental source preview, not a production-ready binary release. See [current limitations](docs/architecture.md#current-limitations).
+Taskport is early software under active development. See [current limitations](docs/architecture.md#current-limitations).
 
 ## What it does
 
@@ -11,6 +11,16 @@ Taskport is an experimental source preview, not a production-ready binary releas
 - Use interactive terminals with your zsh prompt, retained output, and two resizable panes.
 - Give each server task its own local URL and optional, explicitly authorized Cloudflare tunnel.
 - Control projects, tasks, and active sessions through the CLI and portable agent skill.
+- Organize projects into collapsible groups and open quick terminal tabs without creating tasks.
+- Check for signed updates, confirm installation, and restore running services after updating.
+
+## Install
+
+Download the Apple silicon app ZIP from [GitHub Releases](https://github.com/gionatan7/taskport/releases). Requires macOS 14 or later; Xcode is only needed to build from source.
+
+Unzip it and move `Taskport.app` into Applications. This free distribution is ad-hoc signed, not notarized by Apple. If macOS blocks the first launch, try opening the app once, then go to **System Settings → Privacy & Security → Open Anyway** and confirm. Managed Macs may prohibit this approval. See [Apple's instructions](https://support.apple.com/en-us/102445).
+
+The release includes SHA-256 checksums and the matching dependency source/relink archive. To verify the app ZIP, keep its `.sha256` file beside it and run `shasum -a 256 -c Taskport-0.1.0-macos-arm64.zip.sha256`.
 
 ## Build and run
 
@@ -36,7 +46,7 @@ For an authorized development update while Taskport is running, use `bash script
 
 Packaging remaps compiler paths, strips debug/local symbols, and ad-hoc signs the app. Staging is cleaned afterward. Privacy scans are separate manual audits, not build steps; Bun is not needed to build. Ad-hoc signing and a successful build do not make a distributable release.
 
-To prepare a **local binary candidate without installing or launching it**, run `bash scripts/prepare-release.sh`. This requires Bun and Python 3 for the privacy and ZIP audits. It produces an Apple silicon ZIP and SHA-256 checksum under ignored `build/release-candidate/`, scans local identity markers without reporting their values, excludes filesystem metadata, and verifies the extracted app. It refuses to overwrite an existing candidate. `bash scripts/build.sh --package OUTPUT_APP` is the lower-level packaging-only mode and does not run privacy scans. See [publication checks](docs/public-source.md) for the release checklist and privacy limitations.
+To prepare a **local binary candidate without installing or launching it**, run `bash scripts/prepare-release.sh`. This requires Bun and Python 3 for the privacy and ZIP audits, plus the release-signing key in the maintainer's Keychain. It produces an Apple silicon ZIP, SHA-256 checksum, and signed `appcast.xml` under ignored `build/release-candidate/`, scans local identity markers without reporting their values, excludes filesystem metadata, and verifies the extracted app. It refuses to overwrite an existing candidate. `bash scripts/build.sh --package OUTPUT_APP` is the lower-level packaging-only mode and does not run privacy scans. See [publication checks](docs/public-source.md) for the release checklist and privacy limitations.
 
 Prepare the accompanying dependency sources and libintl relinking materials with `python3 scripts/prepare-source-release.py`. Downloads, the temporary Zig compiler, and caches remain project-local and are cleaned afterward. It retains a source/relink archive and checksum beside the ZIP, with neutral metadata and a local-identity audit. The [relinking instructions](docs/dependency-relinking.md) describe the tested modified-library path; it needs no Metal Toolchain or paid Apple account. Publish both archives together.
 
@@ -48,13 +58,19 @@ Add a folder, review imports in Tasks, and pin the services you want Run all to 
 
 Each task tab is a real terminal: type commands or use Ctrl-C. The Terminal panes menu shows another task beside or below it without duplicating its process. Closing an unpinned tab discards its output, not its saved task. Project folder changes require idle terminals; relative task paths follow the new folder, but absolute paths stay unchanged. No files move or tasks re-import automatically.
 
+Quick terminal opens a shell in the selected project's folder without saving a task. These tabs close when their shells exit and do not participate in Run all or session restore. Finish manual terminal work before an update or restart; Taskport cannot replay arbitrary interactive commands.
+
 Sidebar play/stop controls reflect pinned services. Project and global Stop all also interrupt unpinned work and manually entered commands. The subtitle shows detected listening TCP ports, or `Stopped` when none are detected—even if a non-network task is running.
 
 Set a Local URL on each server task. Task links nests by task when several have URLs. A tunnel gets its own tab; stopping the server also stops its tunnel. UI-started tunnels copy the link and show an in-app notice after connection registration, not merely a URL announcement. This is not an origin-health check. `cloudflared` must already be on the shell's PATH; Taskport never installs it.
 
-Temporary tasks disappear after success or an explicit stop; failures stay inspectable until dismissed. Temporary tasks and tunnels never survive relaunch.
+Temporary tasks disappear after success or an explicit stop; failures stay inspectable until dismissed. Ordinary launches discard temporary tasks and tunnels. An explicitly approved update or CLI session restore can restart captured temporary services; tunnels require separate consent and may receive new URLs.
 
 Definitions are stored privately in macOS Application Support, not this checkout. Settings → General → Resume running tasks on launch is enabled by default and restarts previously running pinned services as new processes; it does not restore scrollback. Turning it off clears the resume list without stopping current work. Close hides the window and retains sessions; Quit stops owned sessions, confirming when work is active.
+
+### Updates
+
+Choose **Taskport → Check for Updates…**, or enable automatic checks in Settings → General. Automatic checks are off by default. Installation always needs your confirmation. Updates verify a signed feed and download, then offer to restore running services, including unpinned and temporary tasks. Active one-offs and tunnels need separate opt-ins. Processes restart from the beginning; scrollback, manual commands, and unfinished input are not restored. No telemetry or system profiling is sent.
 
 ## CLI and agents
 

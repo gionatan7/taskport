@@ -5,7 +5,7 @@ import Testing
 struct WorkspaceMigrationTests {
     @Test @MainActor func unchangedStartupStillPersistsMigrationAndPrivateBackup() throws {
         let root = testDirectory("migration-startup")
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(at: root) }
         var legacy = WorkspaceDocument(runningPinnedTaskIDs: [])
         legacy.version = 1
@@ -15,11 +15,29 @@ struct WorkspaceMigrationTests {
         let store = WorkspaceStore(directory: root)
         let before = store.document
         store.resumePinnedTasks()
+        #expect(store.errorMessage == nil)
         #expect(store.document == before)
         #expect(try Data(contentsOf: root.appendingPathComponent("workspace-v1.json")) == bytes)
         let saved = try JSONDecoder().decode(WorkspaceDocument.self, from: Data(contentsOf: persistence.file))
         #expect(saved.version == 3)
         #expect(saved == store.document)
+    }
+
+    @Test @MainActor func nonPrivateStartupDirectoryLeavesLegacyWorkspaceUntouched() throws {
+        let root = testDirectory("migration-unsafe-startup")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o755])
+        defer { try? FileManager.default.removeItem(at: root) }
+        var legacy = WorkspaceDocument(runningPinnedTaskIDs: [])
+        legacy.version = 1
+        let bytes = try JSONEncoder().encode(legacy)
+        let persistence = WorkspacePersistence(directory: root)
+        try bytes.write(to: persistence.file)
+        let store = WorkspaceStore(directory: root)
+        store.resumePinnedTasks()
+        #expect(store.errorMessage != nil)
+        #expect(store.sessions.isEmpty)
+        #expect(try Data(contentsOf: persistence.file) == bytes)
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("workspace-v1.json").path))
     }
 
     @Test func migratesURLsAndKeepsPrivateBackup() throws {

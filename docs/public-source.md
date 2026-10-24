@@ -1,14 +1,12 @@
 # Publication checks
 
-Source publication and binary distribution are separate decisions. A source preview must not imply that the development app is a license-complete or production-ready release.
+Source publication and binary distribution are separate decisions. Audit the exact archives rather than assuming a successful source build is ready to distribute.
 
 ## Source checklist
 
 ```sh
 bun scripts/check-public-source.mjs
-bun test scripts/check-app-privacy.test.mjs
-bun test scripts/verify-licenses.test.mjs
-bun test scripts/check-toolchain.test.mjs
+bun test scripts
 bash scripts/swift.sh test
 bash scripts/build.sh --check
 ```
@@ -25,7 +23,7 @@ The source scanner checks home paths, common credential patterns, credential-bea
 
 `build.sh --check` packages and verifies without installing or touching live tasks. `build.sh --package OUTPUT_APP` retains a fresh verified bundle without installing. Normal `build.sh` installs into Applications after you quit Taskport. These build modes do not run privacy scans.
 
-`bash scripts/prepare-release.sh` is the separate candidate preparation/audit command. It runs the packaging-only build, checks the app with `--local-identities`, creates a ZIP with neutral timestamps and without Unix ownership or extra fields, inspects both local and central ZIP headers, and checks the extracted app's content, notices, and signature. It leaves only a ZIP and SHA-256 checksum in `build/release-candidate/` and refuses overwrites. Complete the binary release checklist below before publication.
+`bash scripts/prepare-release.sh` is the separate candidate preparation/audit command. It runs the packaging-only build, checks the app with `--local-identities`, creates a ZIP with neutral timestamps and without Unix ownership or extra fields, inspects both local and central ZIP headers, and checks the extracted app's content, notices, and signature. It also signs/verifies the ZIP and `appcast.xml` using the maintainer's Keychain key. It retains the ZIP, SHA-256 checksum, and signed feed in `build/release-candidate/` and refuses overwrites. No private key is exported. Complete the binary release checklist below before publication.
 
 `python3 scripts/prepare-source-release.py` prepares the matching source/relink archive and checksum. It verifies pinned download hashes, includes dependency source and an engine archive without libintl, and checks neutral ownership/timestamps and local identity/path markers. Temporary downloads, compilers, and caches are project-local and removed. Upstream public source, fixtures, and author attribution remain verbatim. Run the [documented relink verification](dependency-relinking.md) on the extracted archive; neither a source URL nor GitHub's automatic source archive substitutes for these materials.
 
@@ -37,13 +35,13 @@ Private per-session zsh hooks and command scripts live beneath that directory an
 
 Taskport runs login zsh and user-authorized project commands as the logged-in user. It is not a sandbox for untrusted commands. Ghostty appearance is imported through an allowlist, not by forwarding commands, environment entries, keybindings, or permissions; see [architecture](architecture.md).
 
-Startup resume is enabled by default for previously running pinned services only; disable it in Settings to clear the resume list without stopping current work. Importing a definition does not run it. Temporary tasks, tunnels, one-offs, and unpinned services do not resume.
+Startup resume is enabled by default for previously running pinned services only; disable it in Settings to clear the resume list without stopping current work. Importing a definition does not run it. Explicit CLI restore or an approved update can additionally restart previously active unpinned/temporary services. One-offs and tunnels need separate consent. Manual commands and unfinished input block these restarts; quick shells and terminal history are not replayed.
 
 The CLI uses an owner-only, same-user Unix socket, not a network listener or daemon. Environment values are omitted from list responses, but paths and commands can still be sensitive. Review/redact CLI output, logs, screenshots, and configuration diagnostics before posting public issues. No telemetry or export feature is implemented.
 
 ## Binary release checklist
 
-Builds bundle the checked-in licenses/notices and verify their integrity before signing. The local bundle remains ad-hoc signed, not notarized; notice packaging does not settle the remaining binary compliance gaps. Do not distribute development bundles as release artifacts.
+Builds bundle the checked-in licenses/notices and verify their integrity before signing. The app is ad-hoc signed, not notarized; signed update metadata is a separate verification layer and does not provide Apple's notarization. Distribute only audited release archives with their matching source/relink materials.
 
 Before distributing binaries:
 
@@ -53,4 +51,6 @@ Before distributing binaries:
 - For the free preview route, retain ad-hoc signing and clearly document the first-launch Privacy & Security → Open Anyway step. Developer ID signing/notarization remains an optional future distribution route.
 - Audit the actual final artifact separately: `bun scripts/check-app-privacy.mjs APP_BUNDLE`.
 
-The app scanner checks filenames and readable strings, including binary, NUL-padded, and UTF-16 text, and fails on unreadable entries, symlinks, private/debug artifacts, detected local paths, and common secret patterns without printing their contents. `--local-identities` additionally checks the login/full name, full-name words of at least four characters, configured Git name/email, available computer/host names, and readable hardware serial/UUID; marker values are not saved or reported. It does not prove compressed/encoded data is safe or that licenses are satisfied. Compiler path remapping and stripping do not sanitize arbitrary literals or prebuilt dependencies; old builds remain unchecked.
+Prepare artifacts locally on the documented Xcode toolchain; the private update key remains in the maintainer's Keychain, not CI. Version, build number, and `CHANGELOG.md` belong to one release commit tagged `vX.Y.Z`. Attach the app ZIP/checksum, source/relink archive/checksum, and signed `appcast.xml` to the same draft GitHub Release. Download and audit those exact assets and test the downloaded ZIP on a separate supported Mac before publication. Normal public 0.x releases use GitHub's latest channel; beta/RC releases need a separate feed because `/releases/latest` excludes prereleases. Published builds are immutable: subsequent changes need a new version and build.
+
+The app scanner checks filenames and readable strings, including binary, NUL-padded, and UTF-16 text, and fails on unreadable entries, unexpected symlinks, private/debug artifacts, detected local paths, and common secret patterns without printing their contents. Only Sparkle's exact internal framework aliases are permitted, and their real files are scanned. The intentional public repository URL is exempt from local-name matching, not from path/credential checks. `--local-identities` additionally checks the login/full name, full-name words of at least four characters, configured Git name/email, available computer/host names, and readable hardware serial/UUID; marker values are not saved or reported. It does not prove compressed/encoded data is safe or that licenses are satisfied. Compiler path remapping and stripping do not sanitize arbitrary literals or prebuilt dependencies; old builds remain unchecked.

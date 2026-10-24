@@ -53,6 +53,6 @@ Keep terminal content opaque and readable. Let native controls adopt current pla
 - Zsh only; broader prompt-framework compatibility, stubborn/detached processes, and long-running stress acceptance need further testing.
 - Terminal text accessibility/VoiceOver, IME, native selection/copy/paste, resize/reflow, multiple hidden surfaces, and Intel builds need broader live acceptance. Automated lifecycle tests are not complete accessibility or input-method certification.
 - Two panes, not nested splits; no dependency/group runner, automatic source refresh, explicit saved-task removal, or complete keyboard tab navigation.
-- No log-tail, force-kill, or arbitrary terminal-input CLI API. No Keychain storage or export feature.
+- CLI logs are bounded in-memory snapshots, not a live tail. No force-kill or arbitrary terminal-input CLI API. Saved task environment values are not stored in Keychain; no export feature.
 - Tunnel tests simulate output/lifecycle without exposure. Real public-tunnel acceptance, origin reachability, and missing-cloudflared UX remain separate checks requiring authorization.
-- Local development signing is not a distribution release; complete third-party notices/compliance and [publication checks](public-source.md) remain required.
+- Release bundles are ad-hoc signed, not notarized; first launch can require explicit macOS approval. Release artifacts need their matching dependency sources/relink materials and the [publication checks](public-source.md).

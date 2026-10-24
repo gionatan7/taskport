@@ -10,9 +10,10 @@ Global installation does not bypass agent sandbox permissions. If access to the 
 
 See `taskport help` for the maintained command grammar (`bash scripts/taskport help` is the checkout-local developer alternative). Supported operations:
 
-- Projects: list, add, edit name/folder.
+- Groups: list, add, edit, and remove; removing a group keeps its projects.
+- Projects: list, add, edit name/folder/group, and remove without deleting the folder.
 - Tasks: list, add, edit name/command/cwd/kind/pinning/environment overrides/URL/temporary status, start/stop selected IDs or all pinned services.
-- Sessions: active terminal tasks/manual commands across projects; `--all` includes idle open shells.
+- Sessions: active terminal tasks/manual commands across projects; `--all` includes idle open shells. Quick terminals have `kind: "terminal"`, no saved command, and IDs accepted by `tasks logs` for that project.
 - Ports: `taskport ports list` reports TCP listeners visible to the current user across the Mac, including servers outside Taskport. This command runs directly in the CLI without the app or socket.
 - Status: all project summaries and task state. Session “threads” mean Taskport terminals, not Codex chats.
 
