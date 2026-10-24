@@ -22,6 +22,6 @@ struct PaneMenu: View {
         } label: { Label("Terminal panes", systemImage: "rectangle.split.2x1") }
         .labelStyle(.iconOnly)
         .help("Show another task in a resizable pane; this does not start it")
-        .disabled(project.tasks.count < 2 || project.selectedTaskID == nil)
+        .disabled(project.tasks.count < 2 || project.selectedTaskID == nil || store.selectedQuickTerminal != nil)
     }
 }

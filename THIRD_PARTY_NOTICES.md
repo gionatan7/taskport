@@ -9,9 +9,10 @@ Taskport's original project material is licensed under GNU GPL version 3 only (`
 | libghostty-spm / GhosttyTerminal | [1.6.20260909, commit 7e45d27160f9b34aca9ca5c9820e9207482f9f04](https://github.com/Lakr233/libghostty-spm/tree/7e45d27160f9b34aca9ca5c9820e9207482f9f04) | [MIT, © 2026 @Lakr233](LICENSES/libghostty-spm/LICENSE) |
 | Ghostty engine | [82938b633ba646db38591d969c3c526332bd7e65](https://github.com/ghostty-org/ghostty/tree/82938b633ba646db38591d969c3c526332bd7e65), with wrapper patches | [MIT, © 2024 Mitchell Hashimoto and Ghostty contributors](LICENSES/Ghostty/LICENSE) |
 | MSDisplayLink | [2.2.0, commit 87eb0af130744c8cbe2e31b6e1a5bcd659f1c220](https://github.com/Lakr233/MSDisplayLink/tree/87eb0af130744c8cbe2e31b6e1a5bcd659f1c220) | [MIT, © 2024 Lakr Aream](LICENSES/MSDisplayLink/LICENSE) |
+| Sparkle updater and bundled helpers | [2.9.6, commit ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a](https://github.com/sparkle-project/Sparkle/tree/ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a) | [MIT and retained BSD-2-Clause / zlib-style component notices](LICENSES/Sparkle/LICENSE) |
 | bash-preexec, vendored shell resource | [Wrapper's pinned copy](https://github.com/Lakr233/libghostty-spm/tree/7e45d27160f9b34aca9ca5c9820e9207482f9f04/Sources/GhosttyTerminal/Resources/Ghostty/shell-integration/bash) | [MIT, © 2017 Ryan Caloras and contributors](LICENSES/bash-preexec/LICENSE.md) |
 
-Only the wrapper's `GhosttyTerminal` product is linked. Package revisions are retained in `Package.resolved`. This community wrapper is not an official Ghostty Swift package. Its shell-integration resource bundle, including the original bash-preexec notice, is preserved.
+Only the `GhosttyTerminal` product is linked from the community Ghostty wrapper; it is not an official Ghostty Swift package. Its shell-integration resource bundle, including the original bash-preexec notice, is preserved. Sparkle's updater framework and helpers are bundled separately. Exact package revisions are retained in `Package.resolved`.
 
 The downloaded engine was produced from a **different wrapper revision** than the Swift package:
 

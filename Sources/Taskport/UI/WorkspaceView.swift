@@ -32,7 +32,7 @@ struct WorkspaceView: View {
             .navigationTitle("Taskport")
         } detail: {
             VStack(spacing: 0) {
-                if let project = store.selectedProject, !store.visibleTasks(in: project).isEmpty {
+                if let project = store.selectedProject, !store.visibleTasks(in: project).isEmpty || !store.quickTerminals(in: project).isEmpty {
                     TaskTabBar(project: project, store: store)
                     Divider()
                 }
@@ -65,6 +65,12 @@ struct WorkspaceView: View {
                         Button("New task", systemImage: "plus", action: addTask)
                             .labelStyle(.iconOnly)
                             .help("New task")
+                        Button("Quick terminal", systemImage: "terminal") {
+                            store.perform { try store.openQuickTerminal(projectID: project.id) }
+                        }
+                        .labelStyle(.iconOnly)
+                        .help("Open a shell in this project's folder")
+                        .disabled(store.isReadOnly || store.shutdownInProgress || store.restoreInProgress)
                         ProjectLinks(project: project, store: store)
                         PaneMenu(project: project, store: store)
                     }
@@ -132,8 +138,8 @@ private struct TerminalDeck: View {
     var body: some View {
         ZStack {
             Color(nsColor: .textBackgroundColor)
-            if let project = store.selectedProject {
-                if project.selectedTaskID == nil {
+            if store.selectedProject != nil {
+                if store.selectedTaskID == nil {
                     ContentUnavailableView {
                         Label("Choose a task", systemImage: "terminal")
                     } description: {

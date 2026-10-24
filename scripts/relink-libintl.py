@@ -31,7 +31,7 @@ def main():
     if run(str(zig), "version").strip() != "0.16.0":
         parser.error("Zig 0.16.0 is required")
     for name in ("app", "deps/ghostty/pkg/libintl", "deps/gettext",
-                 "deps/libghostty-spm", "deps/MSDisplayLink", "relink"):
+                 "deps/libghostty-spm", "deps/MSDisplayLink", "deps/Sparkle", "relink"):
         if not (source / name).is_dir():
             parser.error("source/relink archive is incomplete")
 
@@ -42,8 +42,8 @@ def main():
         deps = app / "ReleaseDependencies"
         ignore = shutil.ignore_patterns(".git", ".build", "build", "zig-pkg", "zig-out", ".zig-cache")
         shutil.copytree(source / "app", app, ignore=ignore)
-        for name in ("libghostty-spm", "MSDisplayLink", "gettext"):
-            shutil.copytree(source / "deps" / name, deps / name, ignore=ignore)
+        for name in ("libghostty-spm", "MSDisplayLink", "Sparkle", "gettext"):
+            shutil.copytree(source / "deps" / name, deps / name, ignore=ignore, symlinks=True)
         for name in ("libintl", "apple-sdk"):
             shutil.copytree(source / "deps/ghostty/pkg" / name, deps / name, ignore=ignore)
 
@@ -115,11 +115,21 @@ def main():
         if count != 1:
             raise RuntimeError("unexpected binary target manifest")
         manifest.write_text(text)
+        manifest = deps / "Sparkle/Package.swift"
+        text, count = re.subn(r'\.binaryTarget\(\s*name: "Sparkle",\s*url: url,\s*checksum: checksum\s*\)',
+                             '.binaryTarget(name: "Sparkle", path: "Sparkle.xcframework")', manifest.read_text())
+        if count != 1:
+            raise RuntimeError("unexpected Sparkle dependency manifest")
+        manifest.write_text(text)
         manifest = app / "Package.swift"
         text, count = re.subn(r'\.package\(url: "https://github.com/Lakr233/libghostty-spm.git", exact: "1.6.20260909"\)',
                              '.package(path: "ReleaseDependencies/libghostty-spm")', manifest.read_text())
         if count != 1:
             raise RuntimeError("unexpected Taskport dependency manifest")
+        text, count = re.subn(r'\.package\(url: "https://github.com/sparkle-project/Sparkle.git", exact: "2.9.6"\)',
+                             '.package(path: "ReleaseDependencies/Sparkle")', text)
+        if count != 1:
+            raise RuntimeError("unexpected Taskport Sparkle pin")
         manifest.write_text(text)
         (app / "Package.resolved").unlink()
         run("bash", "scripts/build.sh", "--package", str(output), cwd=app, env=env)

@@ -2,6 +2,7 @@
 """Check source-archive metadata and local identities without reporting their values."""
 from pathlib import Path, PurePosixPath
 import posixpath
+import plistlib
 import re
 import struct
 import subprocess
@@ -10,6 +11,7 @@ import tarfile
 import unicodedata
 
 ROOT = Path(__file__).resolve().parents[1]
+PUBLIC_REPOSITORY = plistlib.loads((ROOT / "Resources/Info.plist").read_bytes())["SUFeedURL"].removesuffix("/releases/latest/download/appcast.xml")
 
 
 def main():
@@ -63,6 +65,11 @@ def main():
                 with tar.extractfile(member) as file:
                     data += file.read().lower()
                 files += 1
+            # Preserve the intentional public repository URL, not unrelated identity occurrences.
+            for encoding in ("utf-8", "utf-16le", "utf-16be"):
+                public_url = PUBLIC_REPOSITORY.encode(encoding).lower()
+                for suffix in ("/", '"', "'", "<", ">", "\n", " ", "\0"):
+                    data = data.replace(public_url + suffix.encode(encoding), suffix.encode(encoding))
             if any(needle in data for needle in needles):
                 raise RuntimeError("source archive contains a local identity or build/home path")
     if not files:

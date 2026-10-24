@@ -1,5 +1,6 @@
 """Verify the actual release ZIP has no extra metadata, comments, or AppleDouble files."""
 import struct
+import stat
 import sys
 import zipfile
 from pathlib import PurePosixPath
@@ -18,6 +19,13 @@ try:
                     or path.parts[0] != "Taskport.app"
                     or any(part.startswith("._") or part == "__MACOSX" for part in path.parts)):
                 raise ValueError("Unexpected archive entry")
+            if stat.S_ISLNK(entry.external_attr >> 16):
+                prefix = "Taskport.app/Contents/Frameworks/Sparkle.framework/"
+                suffix = entry.filename.removeprefix(prefix)
+                allowed = {"Versions/Current": "B", **{name: "Versions/Current/" + name for name in
+                    ("Autoupdate", "Headers", "PrivateHeaders", "Resources", "Modules", "Sparkle", "Updater.app", "XPCServices")}}
+                if not entry.filename.startswith(prefix) or archive.read(entry).decode("utf-8") != allowed.get(suffix):
+                    raise ValueError("Unexpected archive symlink")
             if entry.extra or entry.comment:
                 raise ValueError("Archive contains extra metadata or a file comment")
             if entry.date_time != (2000, 1, 1, 0, 0, 0):

@@ -12,6 +12,7 @@ final class WorkspaceStore {
     private(set) var isReadOnly = false
     private var closingTabIDs: Set<UUID> = []
     private var openTabIDs: Set<UUID> = []
+    private var selectedQuickTerminalIDs: [UUID: UUID] = [:]
     private(set) var preservingResumeState = false
     private(set) var shutdownInProgress = false
     var restoreID: UUID?
@@ -33,7 +34,11 @@ final class WorkspaceStore {
     }
 
     var selectedProject: Project? { document.projects.first { $0.id == document.selectedProjectID } }
-    var selectedTaskID: UUID? { selectedProject?.selectedTaskID }
+    var selectedQuickTerminal: TaskSession? {
+        guard let project = selectedProject, let id = selectedQuickTerminalIDs[project.id] else { return nil }
+        return quickTerminals(in: project).first { $0.id == id }
+    }
+    var selectedTaskID: UUID? { selectedQuickTerminal?.id ?? selectedProject?.selectedTaskID }
     var resumeTasksOnLaunch: Bool { document.resumeTasksOnLaunch ?? true }
 
     func setResumeTasksOnLaunch(_ enabled: Bool) throws {
@@ -43,12 +48,15 @@ final class WorkspaceStore {
         }
         recordRunningPinnedTasks()
     }
-    var activeCount: Int { sessions.filter { $0.phase.isActive }.count }
+    var activeCount: Int { sessions.filter { $0.phase.isActive || $0.manualCommandRunning }.count }
     var openShellCount: Int { sessions.filter { $0.shellPID > 0 }.count }
 
     func session(_ taskID: UUID) -> TaskSession? { sessions.first { $0.id == taskID } }
     func visibleTasks(in project: Project) -> [ProjectTask] {
         project.tasks.filter { !closingTabIDs.contains($0.id) && ($0.pinned || openTabIDs.contains($0.id) || session($0.id) != nil || project.selectedTaskID == $0.id || project.split?.taskID == $0.id) }
+    }
+    func quickTerminals(in project: Project) -> [TaskSession] {
+        sessions.filter { $0.projectID == project.id && $0.isQuickTerminal && !closingTabIDs.contains($0.id) }
     }
     func hasRunningTasks(in project: Project) -> Bool {
         sessions.contains { $0.projectID == project.id && ($0.phase.isActive || $0.manualCommandRunning) }
@@ -66,6 +74,17 @@ final class WorkspaceStore {
 
     /// Close the terminal, not its saved task definition. Keep ownership until the shell exits.
     func closeTab(_ taskID: UUID, projectID: UUID, confirmed: Bool = false) throws {
+        if let terminal = session(taskID), terminal.isQuickTerminal, terminal.projectID == projectID {
+            guard !isReadOnly, !shutdownInProgress else { throw WorkspaceError("The workspace is read-only or shutting down.") }
+            guard confirmed || (!terminal.manualCommandRunning && !terminal.hasPendingInput) else {
+                throw WorkspaceError("Confirm closing this busy terminal first.")
+            }
+            if terminal.shellPID > 0 {
+                closingTabIDs.insert(taskID)
+                terminal.terminate()
+            } else { removeQuickTerminal(taskID, projectID: projectID) }
+            return
+        }
         guard let project = document.projects.first(where: { $0.id == projectID }),
               let task = project.tasks.first(where: { $0.id == taskID }) else { return }
         guard !task.pinned else { throw WorkspaceError("Unpin this task before closing its tab.") }
@@ -112,7 +131,8 @@ final class WorkspaceStore {
     func selectProject(_ id: UUID?) {
         perform {
             try commit { $0.selectedProjectID = id }
-            if let project = selectedProject, let taskID = project.selectedTaskID {
+            if let terminal = selectedQuickTerminal { terminal.terminal.requestFocus() }
+            else if let project = selectedProject, let taskID = project.selectedTaskID {
                 try openTask(taskID, projectID: project.id)
             }
         }
@@ -281,8 +301,47 @@ final class WorkspaceStore {
             }
         }
         // Selecting an unstarted task does not execute a shell or project command.
+        selectedQuickTerminalIDs.removeValue(forKey: projectID)
         openTabIDs.insert(taskID)
         session(taskID)?.terminal.requestFocus()
+    }
+
+    /// Runtime-only shells never create a saved task or an automatically replayable command.
+    @discardableResult
+    func openQuickTerminal(projectID: UUID) throws -> UUID {
+        guard !isReadOnly, !shutdownInProgress, !restoreInProgress else {
+            throw WorkspaceError("Wait for the workspace to become writable before opening a terminal.")
+        }
+        guard let project = document.projects.first(where: { $0.id == projectID }) else { throw WorkspaceError("Project not found.") }
+        try commit { $0.selectedProjectID = projectID }
+        let names = Set(quickTerminals(in: project).compactMap(\.quickTerminalName))
+        var name = "Terminal", number = 1
+        while names.contains(name) { number += 1; name = "Terminal \(number)" }
+        let terminal = TaskSession(taskID: UUID(), projectID: projectID, dataDirectory: persistence.directory, quickTerminalName: name)
+        try terminal.openInteractiveShell(directory: project.directory)
+        sessions.append(terminal)
+        selectedQuickTerminalIDs[projectID] = terminal.id
+        terminal.onShellExit = { [weak self, weak terminal] in
+            guard let terminal else { return }
+            self?.removeQuickTerminal(terminal.id, projectID: projectID)
+        }
+        return terminal.id
+    }
+
+    func selectQuickTerminal(_ id: UUID, projectID: UUID) throws {
+        guard let terminal = session(id), terminal.isQuickTerminal, terminal.projectID == projectID,
+              !closingTabIDs.contains(id) else { throw WorkspaceError("This terminal is no longer open.") }
+        try commit { $0.selectedProjectID = projectID }
+        selectedQuickTerminalIDs[projectID] = id
+        terminal.terminal.requestFocus()
+    }
+
+    private func removeQuickTerminal(_ id: UUID, projectID: UUID) {
+        sessions.removeAll { $0.id == id }
+        closingTabIDs.remove(id)
+        if selectedQuickTerminalIDs[projectID] == id {
+            selectedQuickTerminalIDs[projectID] = sessions.last { $0.projectID == projectID && $0.isQuickTerminal && !closingTabIDs.contains($0.id) }?.id
+        }
     }
 
     func startTask(_ taskID: UUID, projectID: UUID, activate: Bool = true) throws {

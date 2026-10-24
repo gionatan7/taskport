@@ -24,6 +24,8 @@ enum RunPhase: Equatable {
 final class TaskSession: Identifiable {
     let id: UUID
     let projectID: UUID
+    let quickTerminalName: String?
+    var isQuickTerminal: Bool { quickTerminalName != nil }
     let terminal: TerminalViewState
     private(set) var phase: RunPhase = .stopped
     @ObservationIgnored var onPhaseChange: (() -> Void)?
@@ -55,9 +57,11 @@ final class TaskSession: Identifiable {
     @ObservationIgnored private(set) var output = TerminalOutput()
 
     init(taskID: UUID, projectID: UUID, dataDirectory: URL,
+         quickTerminalName: String? = nil,
          pasteConfirmation: TerminalPasteConfirmation = TerminalPasteConfirmation()) {
         id = taskID
         self.projectID = projectID
+        self.quickTerminalName = quickTerminalName
         self.pasteConfirmation = pasteConfirmation
         bootstrapDirectory = dataDirectory.appendingPathComponent("sessions/\(taskID.uuidString)")
         parser = ShellEvents(token: token)
@@ -95,6 +99,16 @@ final class TaskSession: Identifiable {
     }
 
     var canStart: Bool { !isTerminating && !phase.isActive && !manualCommandRunning && !hasPendingInput }
+
+    func openInteractiveShell(directory: String) throws {
+        guard isQuickTerminal, process == nil, !isTerminating else { throw WorkspaceError("This shell is already open or closing.") }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw WorkspaceError("The project folder is unavailable. Reconnect it or edit the project folder.")
+        }
+        try openShell(directory: directory)
+        terminal.requestFocus()
+    }
 
     private func setPhase(_ next: RunPhase) {
         guard phase != next else { return }

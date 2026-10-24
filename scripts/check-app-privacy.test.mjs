@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { checkAppPrivacy } from './check-app-privacy.mjs';
 
@@ -51,6 +51,31 @@ test('redacts filenames that themselves contain personal identity markers', () =
   const result = await checkAppPrivacy(root, [], ['FictionalIdentity']);
   expect(result.findings).toEqual([{ file: '[redacted filename 1]', reason: 'local identity marker' }]);
   expect(JSON.stringify(result)).not.toContain('FictionalIdentity');
+}));
+
+test('allows only the reviewed public repository URL, not identities or private paths nearby', () => fixture(async root => {
+  const url = (await readFile('Resources/Info.plist', 'utf8')).match(/<key>SUFeedURL<\/key>\s*<string>([^<]+)<\/string>/)[1];
+  const identity = new URL(url).pathname.split('/')[1].replace(/\d+$/, '');
+  for (const [name, bytes] of [
+    ['utf8', Buffer.from(url)], ['le', Buffer.from(url, 'utf16le')], ['be', Buffer.from(url, 'utf16le').swap16()],
+  ]) await writeFile(join(root, name), bytes);
+  expect((await checkAppPrivacy(root, [], [identity])).findings).toEqual([]);
+  await writeFile(join(root, 'other'), `${url}\n${identity}\n/Users` + `/${identity}/private`);
+  const result = await checkAppPrivacy(root, [], [identity]);
+  expect(result.findings.map(item => item.reason)).toContain('personal home path');
+  expect(result.findings.map(item => item.reason)).toContain('local identity marker');
+}));
+
+test('allows exact internal Sparkle aliases but rejects alternate targets', () => fixture(async root => {
+  const framework = join(root, 'Contents/Frameworks/Sparkle.framework');
+  await mkdir(join(framework, 'Versions/B'), { recursive: true });
+  await writeFile(join(framework, 'Versions/B/Sparkle'), 'framework binary fixture');
+  await symlink('B', join(framework, 'Versions/Current'));
+  await symlink('Versions/Current/Sparkle', join(framework, 'Sparkle'));
+  expect((await checkAppPrivacy(root, [])).findings).toEqual([]);
+  await rm(join(framework, 'Sparkle'));
+  await symlink('Versions/B/Sparkle', join(framework, 'Sparkle'));
+  expect((await checkAppPrivacy(root, [])).findings.map(item => item.reason)).toContain('unexpected non-file entry');
 }));
 
 test('rejects private temporary paths, credential files and tokens without printing contents', () => fixture(async root => {

@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
@@ -51,5 +51,23 @@ test('rejects comments and malformed archives without echoing their content', ()
   expect(rejected.status).toBe(1);
   expect(rejected.stderr).not.toContain('fictional identity');
   await writeFile(join(root, 'candidate.zip'), 'invalid ZIP');
+  expect(spawnSync('python3', [checker, join(root, 'candidate.zip')]).status).toBe(1);
+}));
+
+test('preserves only exact Sparkle framework aliases', () => fixture(async root => {
+  const framework = join(root, 'Taskport.app/Contents/Frameworks/Sparkle.framework');
+  await mkdir(join(framework, 'Versions/B'), { recursive: true });
+  await writeFile(join(framework, 'Versions/B/Sparkle'), 'framework fixture');
+  await symlink('B', join(framework, 'Versions/Current'));
+  await symlink('Versions/Current/Sparkle', join(framework, 'Sparkle'));
+  execFileSync('/usr/bin/find', [join(root, 'Taskport.app'), '-exec', '/usr/bin/touch', '-t', '200001010000', '{}', '+']);
+  execFileSync('/usr/bin/touch', ['-h', '-t', '200001010000', join(framework, 'Versions/Current'), join(framework, 'Sparkle')]);
+  execFileSync('/usr/bin/zip', ['-X', '-y', '-q', '-r', 'candidate.zip', 'Taskport.app'], { cwd: root });
+  expect(spawnSync('python3', [checker, join(root, 'candidate.zip')]).status).toBe(0);
+  await rm(join(root, 'candidate.zip'));
+  await rm(join(framework, 'Sparkle'));
+  await symlink('../../../escape', join(framework, 'Sparkle'));
+  execFileSync('/usr/bin/touch', ['-h', '-t', '200001010000', join(framework, 'Sparkle')]);
+  execFileSync('/usr/bin/zip', ['-X', '-y', '-q', '-r', 'candidate.zip', 'Taskport.app'], { cwd: root });
   expect(spawnSync('python3', [checker, join(root, 'candidate.zip')]).status).toBe(1);
 }));

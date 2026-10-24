@@ -54,15 +54,30 @@ xcrun actool Resources/Taskport-Pills.icon \
     --target-device mac --minimum-deployment-target 14.0 --platform macosx
 /usr/libexec/PlistBuddy -c "Merge '$taskport_stage/icon-info.plist'" "$taskport_app/Contents/Info.plist"
 ditto "$taskport_bin/GhosttyKit_GhosttyTerminal.bundle" "$taskport_app/Contents/Resources/GhosttyKit_GhosttyTerminal.bundle"
+taskport_sparkle="$taskport_bin/Sparkle.framework"
+test -d "$taskport_sparkle"
+mkdir -p "$taskport_app/Contents/Frameworks"
+ditto "$taskport_sparkle" "$taskport_app/Contents/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath @executable_path/../Frameworks "$taskport_app/Contents/MacOS/Taskport"
 cp LICENSE THIRD_PARTY_NOTICES.md "$taskport_app/Contents/Resources/"
 ditto LICENSES "$taskport_app/Contents/Resources/LICENSES"
 mkdir -p "$taskport_app/Contents/Resources/AgentSkills/taskport"
 cp skills/taskport/SKILL.md "$taskport_app/Contents/Resources/AgentSkills/taskport/SKILL.md"
 bash scripts/verify-licenses.sh "$taskport_app"
 # Finder tags, quarantine/download locations, and other local metadata are not release inputs.
+chmod -R u+w "$taskport_app"
 xattr -cr "$taskport_app"
 # Strip debug/local symbols before signing; never rewrite binary strings.
 strip -S -x "$taskport_app/Contents/MacOS/Taskport" "$taskport_app/Contents/MacOS/taskport-cli"
+# Re-sign nested updater helpers inside-out, with no paid certificate or local identity.
+taskport_framework="$taskport_app/Contents/Frameworks/Sparkle.framework"
+for taskport_helper in "$taskport_framework/Versions/B/XPCServices/Downloader.xpc" \
+                       "$taskport_framework/Versions/B/XPCServices/Installer.xpc" \
+                       "$taskport_framework/Versions/B/Updater.app" \
+                       "$taskport_framework/Versions/B/Autoupdate"; do
+  codesign --force --sign - "$taskport_helper"
+done
+codesign --force --sign - "$taskport_framework"
 codesign --force --sign - "$taskport_app"
 codesign --verify --deep --strict "$taskport_app"
 if [[ "$taskport_check" == true ]]; then

@@ -19,6 +19,8 @@ INPUTS = {
                       "a95db4a004a5b274f2223aefd7401ee5ffa899f9a966e6c37baad3a210791e59"),
     "MSDisplayLink": ("https://codeload.github.com/Lakr233/MSDisplayLink/tar.gz/87eb0af130744c8cbe2e31b6e1a5bcd659f1c220",
                       "5b16b8ca4e6e0d77ac64674fc6d2a9c76177b9febf569c6d1fc3835b6082a4ff"),
+    "Sparkle": ("https://codeload.github.com/sparkle-project/Sparkle/tar.gz/ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a",
+                "49c528efd86801a378ba7196da3ac9722a1165fbf4813ed76c9d636ad054fb9e"),
     "ghostty": ("https://codeload.github.com/ghostty-org/ghostty/tar.gz/82938b633ba646db38591d969c3c526332bd7e65",
                 "6c43388617aa0b2d1ffcca1402c3114545a325a00b66aa75ce40c4edf032e3a7"),
     "producer": ("https://codeload.github.com/Lakr233/libghostty-spm/tar.gz/a5e6f9407b27825e406e66e70b80fbae7f7205ae",
@@ -31,7 +33,8 @@ INPUTS = {
             "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489"),
 }
 PINS = {"libghostty-spm": "7e45d27160f9b34aca9ca5c9820e9207482f9f04",
-        "MSDisplayLink": "87eb0af130744c8cbe2e31b6e1a5bcd659f1c220"}
+        "MSDisplayLink": "87eb0af130744c8cbe2e31b6e1a5bcd659f1c220",
+        "Sparkle": "ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a"}
 
 
 def run(*args, cwd=None, env=None):
@@ -72,6 +75,18 @@ def main():
             target = work / "zig" if name == "zig" else bundle / "deps" / name
             shutil.move(str(entries[0]), target)
             tools[name] = target
+
+        # Retain the exact MIT framework alongside its source for an offline dependency/relink build.
+        sparkle_archive = work / "sparkle-binary.zip"
+        run("curl", "--fail", "--location", "--silent", "--show-error",
+            "https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-for-Swift-Package-Manager.zip",
+            "-o", str(sparkle_archive))
+        if hashlib.sha256(sparkle_archive.read_bytes()).hexdigest() != "8d5fb41d960b43f4a68aa14126bf62b098544ec8d191cdcc73eb14e63a8e7606":
+            raise RuntimeError("Sparkle binary artifact checksum mismatch")
+        sparkle_unpack = work / "sparkle-binary"
+        sparkle_unpack.mkdir()
+        run("unzip", "-q", str(sparkle_archive), "-d", str(sparkle_unpack))
+        shutil.copytree(sparkle_unpack / "Sparkle.xcframework", tools["Sparkle"] / "Sparkle.xcframework", symlinks=True)
 
         app = bundle / "app"
         app.mkdir()

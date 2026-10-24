@@ -44,6 +44,7 @@ struct ProjectSidebar: View {
             if store.document.groups.isEmpty || store.document.projectsGroupCollapsed != true { groupProjects(nil) }
         }
         .listStyle(.sidebar)
+        .background(SidebarOverlayScroller().allowsHitTesting(false).accessibilityHidden(true))
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Menu {
@@ -303,5 +304,48 @@ private struct ProjectRow: View {
     }
     private var statusColor: Color {
         switch store.status(of: project) { case .stopped: .gray; case .partial: .yellow; case .running: .green }
+    }
+}
+
+/// Configure only the sidebar's native List; never change another pane or system preferences.
+private struct SidebarOverlayScroller: NSViewControllerRepresentable {
+    func makeNSViewController(context: Context) -> Controller { Controller() }
+    func updateNSViewController(_ controller: Controller, context: Context) { controller.applyStyle() }
+    static func dismantleNSViewController(_ controller: Controller, coordinator: ()) { controller.styleObservation = nil }
+
+    final class Controller: NSViewController {
+        weak var configuredScroll: NSScrollView?
+        var styleObservation: NSKeyValueObservation?
+        override func loadView() { view = NSView() }
+        override func viewDidAppear() { super.viewDidAppear(); applyStyle() }
+        override func viewDidLayout() { super.viewDidLayout(); applyStyle() }
+
+        func applyStyle() {
+            guard isViewLoaded else { return }
+            var ancestor = view.superview
+            while let container = ancestor, !(container is NSSplitView) {
+                var pending = [container]
+                while let candidate = pending.popLast() {
+                    if let scroll = candidate as? NSScrollView, scroll.documentView is NSTableView {
+                        if configuredScroll !== scroll {
+                            configuredScroll = scroll
+                            // SwiftUI can reapply the system's legacy style after layout.
+                            // Reassert this sidebar-only preference after that update finishes.
+                            styleObservation = scroll.observe(\.scrollerStyle, options: [.new]) { [weak scroll] _, change in
+                                guard change.newValue != .overlay else { return }
+                                Task { @MainActor in
+                                    guard let scroll, scroll.scrollerStyle != .overlay else { return }
+                                    scroll.scrollerStyle = .overlay
+                                }
+                            }
+                        }
+                        if scroll.scrollerStyle != .overlay { scroll.scrollerStyle = .overlay }
+                        return
+                    }
+                    pending.append(contentsOf: candidate.subviews)
+                }
+                ancestor = container.superview
+            }
+        }
     }
 }

@@ -40,7 +40,14 @@ import TaskportControl
                 return response
             }
             if request.operation == "sessions.list" {
-                response.tasks = allTasks().filter { info in
+                let quick = store.sessions.filter(\.isQuickTerminal).map { terminal in
+                    TaskInfo(id: terminal.id, projectID: terminal.projectID, name: terminal.quickTerminalName ?? "Terminal",
+                        command: "", directory: ".", kind: "terminal", phase: terminal.manualCommandRunning ? "running" : "stopped",
+                        pinned: false, localOverride: false, terminalInUse: terminal.manualCommandRunning || terminal.hasPendingInput,
+                        environmentKeys: [], source: nil, exitCode: nil, shellPID: terminal.shellPID,
+                        localURL: nil, temporary: false, tunnelForTaskID: nil, remoteURL: nil)
+                }
+                response.tasks = (allTasks() + quick).filter { info in
                     guard let session = store.session(info.id), session.shellPID > 0 else { return false }
                     return request.flags.contains("all") || session.phase.isActive || session.manualCommandRunning
                 }
@@ -82,14 +89,15 @@ import TaskportControl
                 try store.removeProject(project.id)
             case "tasks.list": response.tasks = project.tasks.map { taskInfo($0, project: project) }
             case "tasks.logs":
-                guard request.taskIDs.count == 1, let task = project.tasks.first(where: { $0.id == request.taskIDs[0] }) else {
-                    throw WorkspaceError("Specify one task ID from this project.")
+                guard request.taskIDs.count == 1, let id = request.taskIDs.first,
+                      project.tasks.contains(where: { $0.id == id }) || store.quickTerminals(in: project).contains(where: { $0.id == id }) else {
+                    throw WorkspaceError("Specify one task or terminal ID from this project.")
                 }
                 guard let lines = Int(request.values["lines"] ?? "100"), (1...1000).contains(lines) else {
                     throw WorkspaceError("Use --lines between 1 and 1000.")
                 }
-                let snapshot = store.session(task.id)?.output.tail(lines: lines)
-                response.taskID = task.id
+                let snapshot = store.session(id)?.output.tail(lines: lines)
+                response.taskID = id
                 response.output = snapshot?.text ?? ""
                 response.outputTruncated = snapshot?.truncated ?? false
             case "tasks.add", "tasks.edit":

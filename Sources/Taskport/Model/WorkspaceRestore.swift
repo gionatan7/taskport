@@ -15,7 +15,7 @@ extension Project {
 
 extension WorkspaceStore {
     /// Validate the whole session before freezing cleanup or touching a running process.
-    func saveSessionHandoff(id: UUID, includeOneOffs: Bool, includeTunnels: Bool) throws -> SessionHandoff {
+    func saveSessionHandoff(id: UUID, includeOneOffs: Bool, includeTunnels: Bool, updateBuild: String? = nil) throws -> SessionHandoff {
         guard !isReadOnly, !restoreInProgress else { throw WorkspaceError("The workspace is read-only or a restore is still in progress.") }
         guard sessions.allSatisfy({ !$0.manualCommandRunning && !$0.hasPendingInput }) else {
             throw WorkspaceError("Finish manual terminal commands and clear unfinished input before restarting. They cannot be reconstructed.")
@@ -54,15 +54,17 @@ extension WorkspaceStore {
         }
         let stopping = Set(skipped.map(\.taskID))
         let handoff = SessionHandoff(id: id, sourceProcessID: ProcessInfo.processInfo.processIdentifier,
-            entries: entries, openTaskIDs: Set(document.projects.flatMap { visibleTasks(in: $0).map(\.id) }).subtracting(stopping), skipped: skipped)
+            entries: entries, openTaskIDs: Set(document.projects.flatMap { visibleTasks(in: $0).map(\.id) }).subtracting(stopping),
+            skipped: skipped, updateBuild: updateBuild)
         try handoff.save(in: persistence.directory)
         prepareToQuit()
         return handoff
     }
 
     /// Runs only after the app owns the workspace lock. Explicit restore replaces normal auto-resume.
-    func restoreSession(_ id: UUID) {
+    func restoreSession(_ id: UUID, updateDefaults: UserDefaults = .standard) {
         restoreID = id
+        defer { UpdateWorkspace.discardConsumed(handoffID: id, in: persistence.directory, defaults: updateDefaults) }
         do {
             let handoff = try SessionHandoff.consume(id, in: persistence.directory)
             prepareToQuit(forRestore: true)

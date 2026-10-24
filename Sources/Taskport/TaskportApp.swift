@@ -18,6 +18,10 @@ struct TaskportApp: App {
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1180, height: 760)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { appDelegate.updates.checkForUpdates() }
+                    .disabled(!appDelegate.updates.canCheck)
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Add project…") { NotificationCenter.default.post(name: .taskportAddProject, object: nil) }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -36,13 +40,16 @@ struct TaskportApp: App {
                 Button("Show Taskport") { appDelegate.showWindow() }.keyboardShortcut("0", modifiers: .command)
             }
         }
-        Settings { TaskportSettings(store: appDelegate.store) }
+        Settings { TaskportSettings(store: appDelegate.store, updates: appDelegate.updates) }
     }
 }
 
 @MainActor
 final class TaskportAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    let store = WorkspaceStore()
+    let store: WorkspaceStore
+    lazy var updates = AppUpdates(store: store)
+    private var startupError: String?
+    private var updateHandoffID: UUID?
     private weak var window: NSWindow?
     private var quitting = false
     private var controlServer: ControlServer?
@@ -50,12 +57,31 @@ final class TaskportAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
     private var cliQuitReady = false
     private var shutdownError: String?
 
+    override init() {
+        do {
+            if CommandLine.arguments.contains("--restore-session") { store = WorkspaceStore(directory: ControlPaths.directory) }
+            else {
+                let launch = try UpdateWorkspace.resolveLaunch(fallback: ControlPaths.directory,
+                    explicitDirectory: ProcessInfo.processInfo.environment["TASKPORT_DATA_DIR"],
+                    build: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
+                    processID: ProcessInfo.processInfo.processIdentifier)
+                store = WorkspaceStore(directory: launch.directory)
+                updateHandoffID = launch.handoffID
+            }
+        } catch {
+            store = WorkspaceStore()
+            startupError = error.localizedDescription
+        }
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         window = NSApp.windows.first { $0.canBecomeMain }
         window?.delegate = self
         window?.autorecalculatesKeyViewLoop = true
         showWindow()
+        if let startupError { store.blockWrites("Update restore unavailable: \(startupError)"); return }
         do {
             let server = ControlServer(directory: store.persistence.directory)
             try server.start(afterResponse: { [weak self] request, response, sent in
@@ -77,7 +103,13 @@ final class TaskportAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
                     return
                 }
                 store.resumePinnedTasks(restoring: id)
-            } else { store.resumePinnedTasks() }
+            } else {
+                let id = try updateHandoffID ?? SessionHandoff.restoreAfterUpdate(in: store.persistence.directory,
+                    build: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
+                    processID: ProcessInfo.processInfo.processIdentifier)
+                store.resumePinnedTasks(restoring: id)
+            }
+            updates.start()
         } catch { store.blockWrites("Workspace control unavailable: \(error.localizedDescription)") }
     }
     func applicationWillTerminate(_ notification: Notification) { controlServer?.stop() }
@@ -90,6 +122,9 @@ final class TaskportAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         if cliQuitReady { return .terminateNow }
         guard !quitting else { return .terminateCancel }
         guard !store.restoreInProgress else { store.errorMessage = "Wait for session restore to finish before quitting."; return .terminateCancel }
+        if let update = updates.installation {
+            return updates.prepareTermination(for: update) { sender.reply(toApplicationShouldTerminate: $0) }
+        }
         guard store.openShellCount > 0 else { return .terminateNow }
         showWindow()
         let alert = NSAlert()
@@ -139,7 +174,7 @@ final class TaskportAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
                 response.ok = shutdownError == nil
                 return response
             }
-            guard request.operation == "app.quit", !quitting, !store.restoreInProgress,
+            guard request.operation == "app.quit", !quitting, !store.restoreInProgress, updates.installation == nil,
                   Set(request.values.keys) == ["handoff-id"], let value = request.values["handoff-id"], let id = UUID(uuidString: value),
                   request.flags.isSubset(of: ["include-one-offs", "include-tunnels"]) else {
                 throw ControlError("Unsupported lifecycle request, or a restart/restore is already in progress.")

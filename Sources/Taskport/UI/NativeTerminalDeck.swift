@@ -29,14 +29,14 @@ struct NativeTerminalDeck: NSViewRepresentable {
 
         func update(_ view: TaskSplitView, store: WorkspaceStore) {
             let project = store.selectedProject
-            let primary = project?.selectedTaskID
-            let secondary = project?.split?.taskID
+            let primary = store.selectedTaskID
+            let secondary = store.selectedQuickTerminal == nil ? project?.split?.taskID : nil
             let visible = [primary, secondary].compactMap { $0 }
             let visibleIDs = Set(visible)
             let axis = project?.split?.axis ?? .sideBySide
             let nextLayoutKey = "\(project?.id.uuidString ?? "")-\(visible)-\(axis)"
             let sessions = Dictionary(uniqueKeysWithValues: store.sessions.map { ($0.id, $0) })
-            let allIDs = Set(store.document.projects.flatMap(\.tasks).map(\.id))
+            let allIDs = Set(store.document.projects.flatMap(\.tasks).map(\.id)).union(sessions.values.filter(\.isQuickTerminal).map(\.id))
             let retainedIDs = Set(sessions.keys).union(visibleIDs).intersection(allIDs)
             for id in Array(hosts.keys) where !retainedIDs.contains(id) {
                 if let host = hosts.removeValue(forKey: id) {
@@ -45,20 +45,22 @@ struct NativeTerminalDeck: NSViewRepresentable {
                 }
             }
             for owner in store.document.projects {
-                for task in owner.tasks where retainedIDs.contains(task.id) {
-                    let pane = TaskPane(task: task, projectID: owner.id, store: store, showHeader: secondary != nil && visibleIDs.contains(task.id))
+                let tabs: [(id: UUID, task: ProjectTask?)] = owner.tasks.map { ($0.id, $0) }
+                    + store.sessions.filter { $0.projectID == owner.id && $0.isQuickTerminal }.map { ($0.id, nil) }
+                for tab in tabs where retainedIDs.contains(tab.id) {
+                    let pane = TaskPane(task: tab.task, terminalID: tab.id, projectID: owner.id, store: store, showHeader: secondary != nil && visibleIDs.contains(tab.id))
                     let host: NSHostingView<TaskPane>
-                    if let existing = hosts[task.id] { host = existing; host.rootView = pane }
+                    if let existing = hosts[tab.id] { host = existing; host.rootView = pane }
                     else {
                         host = NSHostingView(rootView: pane)
                         host.sizingOptions = []
                         host.frame = view.bounds
-                        hosts[task.id] = host
+                        hosts[tab.id] = host
                         view.addSubview(host)
                     }
-                    host.isHidden = !visibleIDs.contains(task.id)
+                    host.isHidden = !visibleIDs.contains(tab.id)
                     host.setAccessibilityHidden(host.isHidden)
-                    if let session = sessions[task.id], session.terminal.isSurfaceVisible == host.isHidden {
+                    if let session = sessions[tab.id], session.terminal.isSurfaceVisible == host.isHidden {
                         DispatchQueue.main.async { [weak host, weak session] in
                             guard let host, let session else { return }
                             session.terminal.isSurfaceVisible = !host.isHidden
@@ -172,16 +174,17 @@ final class TaskSplitView: NSSplitView {
 }
 
 struct TaskPane: View {
-    let task: ProjectTask
+    let task: ProjectTask?
+    let terminalID: UUID
     let projectID: UUID
     let store: WorkspaceStore
     let showHeader: Bool
     @FocusState private var focused: Bool
 
     var body: some View {
-        let session = store.session(task.id)
+        let session = store.session(terminalID)
         VStack(spacing: 0) {
-            if showHeader {
+            if showHeader, let task {
                 HStack {
                     Button(task.definition.name, systemImage: "terminal") { session?.terminal.requestFocus() }
                         .buttonStyle(.borderless).help("Focus \(task.definition.name) terminal")
@@ -201,7 +204,7 @@ struct TaskPane: View {
             }
             if let session {
                 TerminalSurfaceView(context: session.terminal).terminalFocused($focused)
-            } else {
+            } else if let task {
                 ContentUnavailableView {
                     Label(task.definition.name, systemImage: "terminal")
                 } description: {
@@ -218,6 +221,7 @@ struct TaskPane: View {
 
     private func start() {
         store.perform {
+            guard let task else { return }
             guard !task.isTunnel else { throw WorkspaceError("Start a tunnel from Task links after confirming public exposure.") }
             try store.startTask(task.id, projectID: projectID, activate: false)
             store.session(task.id)?.terminal.requestFocus()

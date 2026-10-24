@@ -10,7 +10,7 @@ taskport_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionStrin
 [[ "$taskport_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid release version.' >&2; exit 1; }
 taskport_output="$taskport_root/build/release-candidate"
 taskport_name="Taskport-$taskport_version-macos-arm64.zip"
-if [[ -e "$taskport_output/$taskport_name" || -L "$taskport_output/$taskport_name" || -L "$taskport_output" ]]; then
+if [[ -e "$taskport_output/$taskport_name" || -L "$taskport_output/$taskport_name" || -L "$taskport_output" || -e "$taskport_output/appcast.xml" || -L "$taskport_output/appcast.xml" ]]; then
   echo 'The release candidate already exists or its path is linked; inspect it before replacing it.' >&2
   exit 1
 fi
@@ -22,10 +22,10 @@ taskport_arch="$(lipo -archs "$taskport_stage/Taskport.app/Contents/MacOS/Taskpo
 [[ "$taskport_arch" == arm64 ]] || { echo 'This release recipe currently requires an arm64 build.' >&2; exit 1; }
 bun scripts/check-app-privacy.mjs "$taskport_stage/Taskport.app" --local-identities
 # Keep local build/source modification times out of the ZIP's mandatory DOS timestamps.
-/usr/bin/find "$taskport_stage/Taskport.app" -exec /usr/bin/touch -t 200001010000 {} +
+/usr/bin/find "$taskport_stage/Taskport.app" -exec /usr/bin/touch -h -t 200001010000 {} +
 # -X omits Unix UID/GID and extra attributes; a ZIP contains neither ACLs nor resource forks.
 # macOS can retain its protected provenance xattr locally; inspect the archive itself for metadata.
-(cd "$taskport_stage" && COPYFILE_DISABLE=1 /usr/bin/zip -X -q -r "$taskport_name" Taskport.app)
+(cd "$taskport_stage" && COPYFILE_DISABLE=1 /usr/bin/zip -X -y -q -r "$taskport_name" Taskport.app)
 python3 scripts/check-release-archive.py "$taskport_stage/$taskport_name"
 mkdir "$taskport_stage/extracted"
 /usr/bin/unzip -q "$taskport_stage/$taskport_name" -d "$taskport_stage/extracted"
@@ -33,8 +33,10 @@ bun scripts/check-app-privacy.mjs "$taskport_stage/extracted/Taskport.app" --loc
 bash scripts/verify-licenses.sh "$taskport_stage/extracted/Taskport.app"
 codesign --verify --deep --strict "$taskport_stage/extracted/Taskport.app"
 diff -qr "$taskport_stage/Taskport.app" "$taskport_stage/extracted/Taskport.app" >/dev/null
+python3 scripts/prepare-appcast.py "$taskport_stage/$taskport_name" --output "$taskport_stage/appcast.xml"
 mkdir -p "$taskport_output"
 mv "$taskport_stage/$taskport_name" "$taskport_output/$taskport_name"
+mv "$taskport_stage/appcast.xml" "$taskport_output/appcast.xml"
 (cd "$taskport_output" && shasum -a 256 "$taskport_name" > "$taskport_name.sha256")
 echo "Local candidate prepared: build/release-candidate/$taskport_name"
 echo 'Publish only with the matching verified source/relink archive and after clean-machine testing.'

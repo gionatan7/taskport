@@ -1,10 +1,19 @@
-import { lstat, readdir, readFile } from 'node:fs/promises';
+import { lstat, readdir, readFile, readlink, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const info = await readFile(join(sourceRoot, 'Resources/Info.plist'), 'utf8');
+const publicRepository = info.match(/<key>SUFeedURL<\/key>\s*<string>(https:\/\/github\.com\/[^/]+\/[^/]+)\/releases\/latest\/download\/appcast\.xml<\/string>/)?.[1];
+const publicURLPattern = publicRepository && new RegExp(`${publicRepository.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[\\s/"'<>\\x00])`, 'g');
+const sparkleRoot = 'Contents/Frameworks/Sparkle.framework/';
+const sparkleLinks = new Map([
+  ['Versions/Current', 'B'],
+  ...['Autoupdate', 'Headers', 'PrivateHeaders', 'Resources', 'Modules', 'Sparkle', 'Updater.app', 'XPCServices']
+    .map(name => [name, `Versions/Current/${name}`]),
+]);
 const patterns = [
   ['personal home path', /\/(?:Users|home)\/[^\s/"'<>\x00]+(?:\/|(?=$|[\s"'<>\x00]))/],
   ['private temporary path', /\/(?:private\/)?var\/folders\//],
@@ -27,15 +36,28 @@ export const checkAppPrivacy = async (bundle, forbiddenPrefixes = [sourceRoot, h
       if (pattern.test(text)) findings.push({ file, reason });
     }
     if (prefixes.some(prefix => text.includes(prefix))) findings.push({ file, reason: 'local build/home path' });
-    const normalized = text.normalize('NFC').toLowerCase();
+    // The reviewed public repository URL is intentional, not a local account leak.
+    // Only the URL is exempt; paths, credentials, and identity text around it are still checked.
+    const normalized = (publicURLPattern ? text.replaceAll(publicURLPattern, '') : text).normalize('NFC').toLowerCase();
     if (identities.some(value => normalized.includes(value))) findings.push({ file, reason: 'local identity marker' });
   };
   const walk = async (directory) => {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = join(directory, entry.name);
       const file = relative(root, path);
-      // Do not follow links out of the bundle or silently skip unscannable entries.
-      if (entry.isSymbolicLink() || (!entry.isDirectory() && !entry.isFile())) {
+      // Preserve only Sparkle's exact framework aliases; scan their real files once under Versions/B.
+      if (entry.isSymbolicLink()) {
+        const expected = file.startsWith(sparkleRoot) && sparkleLinks.get(file.slice(sparkleRoot.length));
+        let valid = false;
+        if (expected && await readlink(path) === expected) {
+          const target = await realpath(path);
+          const versionRoot = join(root, sparkleRoot, 'Versions/B');
+          valid = target === versionRoot || target.startsWith(`${versionRoot}/`);
+        }
+        if (!valid) findings.push({ file, reason: 'unexpected non-file entry' });
+        continue;
+      }
+      if (!entry.isDirectory() && !entry.isFile()) {
         findings.push({ file, reason: 'unexpected non-file entry' });
         continue;
       }
