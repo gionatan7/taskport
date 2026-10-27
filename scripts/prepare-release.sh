@@ -32,6 +32,7 @@ mkdir "$taskport_stage/extracted"
 bun scripts/check-app-privacy.mjs "$taskport_stage/extracted/Taskport.app" --local-identities
 bash scripts/verify-licenses.sh "$taskport_stage/extracted/Taskport.app"
 codesign --verify --deep --strict "$taskport_stage/extracted/Taskport.app"
+bash scripts/prepare-runtime-paths.sh --check "$taskport_stage/extracted/Taskport.app/Contents/MacOS/Taskport" "$taskport_stage/extracted/Taskport.app/Contents/MacOS/taskport-cli"
 diff -qr "$taskport_stage/Taskport.app" "$taskport_stage/extracted/Taskport.app" >/dev/null
 python3 scripts/prepare-appcast.py "$taskport_stage/$taskport_name" --output "$taskport_stage/appcast.xml"
 mkdir -p "$taskport_output"

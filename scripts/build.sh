@@ -44,6 +44,9 @@ taskport_app="$taskport_stage/Taskport.app"
 mkdir -p "$taskport_app/Contents/MacOS" "$taskport_app/Contents/Resources"
 cp "$taskport_bin/Taskport" "$taskport_app/Contents/MacOS/Taskport"
 cp "$taskport_bin/taskport-cli" "$taskport_app/Contents/MacOS/taskport-cli"
+# SwiftPM adds an Xcode-only RPATH that can trip Gatekeeper on recipients' Macs.
+# Remove it only from staged copies, before any app signature is produced.
+bash scripts/prepare-runtime-paths.sh "$taskport_app/Contents/MacOS/Taskport" "$taskport_app/Contents/MacOS/taskport-cli"
 cp Resources/Info.plist "$taskport_app/Contents/Info.plist"
 xcrun actool Resources/Taskport-Pills.icon \
     --compile "$taskport_app/Contents/Resources" \
@@ -80,6 +83,7 @@ done
 codesign --force --sign - "$taskport_framework"
 codesign --force --sign - "$taskport_app"
 codesign --verify --deep --strict "$taskport_app"
+bash scripts/prepare-runtime-paths.sh --check "$taskport_app/Contents/MacOS/Taskport" "$taskport_app/Contents/MacOS/taskport-cli"
 if [[ "$taskport_check" == true ]]; then
   echo 'Release app verified; check-only mode leaves the installed app and running tasks untouched.'
 elif [[ -n "$taskport_package" ]]; then
