@@ -4,9 +4,11 @@ import UniformTypeIdentifiers
 struct ProjectSidebar: View {
     let store: WorkspaceStore
     @Binding var sheet: WorkspaceSheet?
+    let isVisible: Bool
     @State private var removingProject: Project?
     @State private var removingGroup: ProjectGroup?
     @State private var groupEditor: GroupEditorRequest?
+    @State private var pendingShare: PendingTunnelShare?
 
     var body: some View {
         List(selection: Binding(get: { store.document.selectedProjectID }, set: store.selectProject)) {
@@ -44,7 +46,28 @@ struct ProjectSidebar: View {
             if store.document.groups.isEmpty || store.document.projectsGroupCollapsed != true { groupProjects(nil) }
         }
         .listStyle(.sidebar)
-        .background(SidebarOverlayScroller().allowsHitTesting(false).accessibilityHidden(true))
+        // Two points plus the heading's four-point inset match the tab strip's six-point inset.
+        .padding(.top, store.document.groups.isEmpty ? 0 : 2)
+        .background(SidebarScrollerAppearance().allowsHitTesting(false).accessibilityHidden(true))
+        .toolbar {
+            if isVisible, !store.document.groups.isEmpty {
+                if #available(macOS 26, *) { ToolbarSpacer(.flexible, placement: .navigation) }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        store.perform { try store.setAllGroupsCollapsed(store.hasExpandedGroups) }
+                    } label: {
+                        Image(systemName: store.hasExpandedGroups ? "rectangle.compress.vertical" : "rectangle.expand.vertical")
+                            .resizable().scaledToFit()
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(width: 12, height: 12)
+                            .frame(width: 28, height: 28)
+                    }
+                    .accessibilityLabel(store.hasExpandedGroups ? "Collapse all groups" : "Expand all groups")
+                    .help(store.hasExpandedGroups ? "Collapse all groups" : "Expand all groups")
+                    .disabled(store.isReadOnly)
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Menu {
@@ -66,6 +89,7 @@ struct ProjectSidebar: View {
         .sheet(item: $groupEditor) { request in
             GroupEditor(store: store, group: request.group, projectID: request.projectID)
         }
+        .modifier(TunnelSharingConfirmation(store: store, pendingShare: $pendingShare))
         .confirmationDialog("Remove this project from Taskport?", isPresented: Binding(
             get: { removingProject != nil }, set: { if !$0 { removingProject = nil } }
         ), titleVisibility: .visible) {
@@ -103,6 +127,12 @@ struct ProjectSidebar: View {
             ProjectRow(project: project, store: store)
                 .padding(.leading, store.document.groups.isEmpty ? 0 : 16)
                 .tag(project.id)
+                // Keep selection visible when the terminal receives keyboard focus.
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(store.document.selectedProjectID == project.id ? Color("SelectionBackground") : .clear)
+                        .padding(.horizontal, 10)
+                )
                 .contextMenu {
                     Button("Start all", systemImage: "play.fill") { store.runAll(in: project) }
                         .disabled(store.isReadOnly || !project.tasks.contains { $0.participatesInStatus && store.session($0.id)?.phase.isActive != true })
@@ -117,6 +147,11 @@ struct ProjectSidebar: View {
                                     catch { store.errorMessage = error.localizedDescription }
                                 }
                             }
+                        }
+                    }
+                    if !project.linkedTasks.isEmpty {
+                        Menu("Links", systemImage: "link") {
+                            ProjectLinkActions(project: project, store: store, pendingShare: $pendingShare)
                         }
                     }
                     Menu("Move to group") {
@@ -169,7 +204,10 @@ private struct ProjectGroupHeading: View {
 
     private var heading: some View {
         let name = group?.name ?? "Projects"
-        let count = store.document.projects.filter { $0.groupID == group?.id }.count
+        let projects = store.document.projects.filter { $0.groupID == group?.id }
+        let count = projects.count
+        let hasRunningTasks = projects.contains { store.hasRunningTasks(in: $0) }
+        let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
         return HStack(spacing: 8) {
             Button {
                 store.perform { try store.setGroupCollapsed(group?.id, !collapsed) }
@@ -179,19 +217,25 @@ private struct ProjectGroupHeading: View {
                         .font(.system(size: 9, weight: .bold)).frame(width: 10).accessibilityHidden(true)
                     Text(name).lineLimit(1).layoutPriority(1)
                     Spacer(minLength: 4)
+                    if hasRunningTasks {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 8, weight: .semibold)).foregroundStyle(.green)
+                            .help("Tasks running in this group")
+                            .accessibilityHidden(true)
+                    }
                     Text(count, format: .number).font(.caption).monospacedDigit().foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity, minHeight: 32, maxHeight: 32)
+                .frame(maxWidth: .infinity, minHeight: 30, maxHeight: 30)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("\(collapsed ? "Expand" : "Collapse") \(name)")
             .accessibilityLabel("\(name), \(count) projects")
-            .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
+            .accessibilityValue("\(collapsed ? "Collapsed" : "Expanded")\(hasRunningTasks ? ", tasks running" : "")")
             if let group {
                 Image(systemName: "line.3.horizontal")
                     .font(.caption).foregroundStyle(.secondary)
-                    .frame(width: 18, height: 32).contentShape(Rectangle())
+                    .frame(width: 18, height: 30).contentShape(Rectangle())
                     .draggable(ProjectGroupTransfer(id: group.id))
                     .help("Drag to reorder \(name)")
                     .accessibilityLabel("Reorder \(name)")
@@ -199,19 +243,23 @@ private struct ProjectGroupHeading: View {
         }
         .font(.callout.weight(.semibold)).textCase(nil)
         .foregroundStyle(Color(nsColor: .labelColor))
-        .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 32, maxHeight: 32)
-        .background(isDropTargeted ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
-        .overlay { RoundedRectangle(cornerRadius: 7).strokeBorder(isDropTargeted ? Color.accentColor : Color(nsColor: .separatorColor), lineWidth: 0.5) }
-        .contentShape(RoundedRectangle(cornerRadius: 7))
+        .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: 30, maxHeight: 30)
+        .contentShape(Rectangle())
         .disabled(store.isReadOnly)
         .padding(.vertical, 4)
         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        .listRowBackground(
+            shape.fill(isDropTargeted ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.08))
+                .overlay { shape.strokeBorder(isDropTargeted ? Color.accentColor : Color(nsColor: .separatorColor), lineWidth: 0.5) }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+        )
     }
 
     private func move(_ items: [ProjectGroupTransfer], at location: CGPoint) -> Bool {
         guard items.count == 1, let item = items.first, !store.isReadOnly else { return false }
         do {
-            try store.moveGroup(item.id, relativeTo: group?.id, after: group != nil && location.y > 20)
+            try store.moveGroup(item.id, relativeTo: group?.id, after: group != nil && location.y > 19)
             return true
         } catch { store.errorMessage = error.localizedDescription; return false }
     }
@@ -268,14 +316,16 @@ private struct GroupEditor: View {
 private struct ProjectRow: View {
     let project: Project
     let store: WorkspaceStore
+    private var isSelected: Bool { store.document.selectedProjectID == project.id }
+
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: project.iconName ?? "folder").foregroundStyle(.secondary)
+            Image(systemName: project.iconName ?? "folder").foregroundStyle(isSelected ? .white : .secondary)
             VStack(alignment: .leading, spacing: 3) {
                 Text(project.name).lineLimit(1)
                 let ports = store.listeningPorts[project.id] ?? []
                 Text(ListeningPorts.label(ports))
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(isSelected ? .white : .secondary)
                     .lineLimit(1)
                     .help(ports.isEmpty ? "No listening TCP ports detected" : ListeningPorts.label(ports))
                     .accessibilityLabel(ports.isEmpty ? "No listening TCP ports" : "Listening ports: \(ports.map(String.init).joined(separator: ", "))")
@@ -283,7 +333,7 @@ private struct ProjectRow: View {
             Spacer(minLength: 4)
             if project.tasks.contains(where: { $0.sourceKey == "builtin:cloudflare" && store.session($0.id)?.phase == .running }) {
                 Image(systemName: "network")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(isSelected ? .white : .secondary)
                     .help("Tunnel running").accessibilityLabel("Tunnel running")
             }
             Button {
@@ -299,47 +349,46 @@ private struct ProjectRow: View {
             .accessibilityLabel("\(store.status(of: project) == .running ? "Stop all tasks in" : "Start all pinned tasks in") \(project.name)")
             .disabled(store.isReadOnly || !project.tasks.contains(where: \.participatesInStatus))
         }
+        .foregroundStyle(isSelected ? .white : .primary)
         .padding(.vertical, 5)
         .accessibilityElement(children: .contain)
     }
     private var statusColor: Color {
-        switch store.status(of: project) { case .stopped: .gray; case .partial: .yellow; case .running: .green }
+        switch store.status(of: project) {
+        case .stopped: isSelected ? .white : .gray
+        case .partial: .yellow
+        case .running: .green
+        }
     }
 }
 
-/// Configure only the sidebar's native List; never change another pane or system preferences.
-private struct SidebarOverlayScroller: NSViewControllerRepresentable {
-    func makeNSViewController(context: Context) -> Controller { Controller() }
-    func updateNSViewController(_ controller: Controller, context: Context) { controller.applyStyle() }
-    static func dismantleNSViewController(_ controller: Controller, coordinator: ()) { controller.styleObservation = nil }
+/// Customize the native handle's track without changing macOS visibility, layout, or input behavior.
+private struct SidebarScrollerAppearance: NSViewRepresentable {
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ view: Probe, context: Context) { view.configure() }
 
-    final class Controller: NSViewController {
+    final class Probe: NSView {
         weak var configuredScroll: NSScrollView?
-        var styleObservation: NSKeyValueObservation?
-        override func loadView() { view = NSView() }
-        override func viewDidAppear() { super.viewDidAppear(); applyStyle() }
-        override func viewDidLayout() { super.viewDidLayout(); applyStyle() }
 
-        func applyStyle() {
-            guard isViewLoaded else { return }
-            var ancestor = view.superview
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); configure() }
+        override func layout() { super.layout(); configure() }
+
+        func configure() {
+            if let scroll = configuredScroll, scroll.window === window, scroll.verticalScroller is TracklessScroller { return }
+            var ancestor = superview
             while let container = ancestor, !(container is NSSplitView) {
                 var pending = [container]
                 while let candidate = pending.popLast() {
                     if let scroll = candidate as? NSScrollView, scroll.documentView is NSTableView {
-                        if configuredScroll !== scroll {
-                            configuredScroll = scroll
-                            // SwiftUI can reapply the system's legacy style after layout.
-                            // Reassert this sidebar-only preference after that update finishes.
-                            styleObservation = scroll.observe(\.scrollerStyle, options: [.new]) { [weak scroll] _, change in
-                                guard change.newValue != .overlay else { return }
-                                Task { @MainActor in
-                                    guard let scroll, scroll.scrollerStyle != .overlay else { return }
-                                    scroll.scrollerStyle = .overlay
-                                }
-                            }
+                        guard let original = scroll.verticalScroller else { return }
+                        if !(original is TracklessScroller) {
+                            let scroller = TracklessScroller(frame: original.frame)
+                            scroller.controlSize = original.controlSize
+                            scroller.doubleValue = original.doubleValue
+                            scroller.knobProportion = original.knobProportion
+                            scroll.verticalScroller = scroller
                         }
-                        if scroll.scrollerStyle != .overlay { scroll.scrollerStyle = .overlay }
+                        configuredScroll = scroll
                         return
                     }
                     pending.append(contentsOf: candidate.subviews)
@@ -347,5 +396,11 @@ private struct SidebarOverlayScroller: NSViewControllerRepresentable {
                 ancestor = container.superview
             }
         }
+    }
+
+    final class TracklessScroller: NSScroller {
+        override class var isCompatibleWithOverlayScrollers: Bool { true }
+        override var isOpaque: Bool { false }
+        override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
     }
 }

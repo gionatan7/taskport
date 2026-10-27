@@ -3,33 +3,38 @@ import SwiftUI
 struct ProjectLinks: View {
     let project: Project
     let store: WorkspaceStore
-    @State private var sharingTask: ProjectTask?
+    @State private var pendingShare: PendingTunnelShare?
 
     var body: some View {
-        let tasks = project.linkedTasks
-        if !tasks.isEmpty {
+        if !project.linkedTasks.isEmpty {
             Menu {
-                if tasks.count == 1, let task = tasks.first {
-                    actions(for: task)
-                } else {
-                    ForEach(tasks) { task in
-                        Menu(task.definition.name) { actions(for: task) }
-                    }
-                }
+                ProjectLinkActions(project: project, store: store, pendingShare: $pendingShare)
             } label: { Label("Task links", systemImage: "link") }
             .labelStyle(.iconOnly)
             .help("Local and remote task links")
-            .confirmationDialog("Share this local service publicly?", isPresented: Binding(
-                get: { sharingTask != nil }, set: { if !$0 { sharingTask = nil } }
-            ), titleVisibility: .visible) {
-                Button("Start tunnel") {
-                    if let task = sharingTask {
-                        store.perform { try store.startTunnel(for: task.id, projectID: project.id, confirmedURL: task.localURL ?? "") }
-                    }
-                    sharingTask = nil
-                }
-            } message: {
-                Text("Anyone with the temporary link can access \(sharingTask?.localURL ?? "this service"). Only share a service you intend to expose. Requires cloudflared on your shell's PATH; Taskport won't install it.")
+            .modifier(TunnelSharingConfirmation(store: store, pendingShare: $pendingShare))
+        }
+    }
+}
+
+/// Shared by the toolbar and sidebar; keep the task's owning project when it isn't selected.
+struct PendingTunnelShare {
+    let projectID: UUID
+    let task: ProjectTask
+}
+
+struct ProjectLinkActions: View {
+    let project: Project
+    let store: WorkspaceStore
+    @Binding var pendingShare: PendingTunnelShare?
+
+    var body: some View {
+        let tasks = project.linkedTasks
+        if tasks.count == 1, let task = tasks.first {
+            actions(for: task)
+        } else {
+            ForEach(tasks) { task in
+                Menu(task.definition.name) { actions(for: task) }
             }
         }
     }
@@ -49,7 +54,8 @@ struct ProjectLinks: View {
                     .disabled(session?.remoteURL == nil)
                 Button("Stop tunnel") { if let tunnel { store.stopTask(tunnel.id, projectID: project.id) } }
             } else {
-                Button("Start tunnel…") { sharingTask = task }.disabled(store.isReadOnly)
+                Button("Start tunnel…") { pendingShare = PendingTunnelShare(projectID: project.id, task: task) }
+                    .disabled(store.isReadOnly)
             }
         }
     }
@@ -57,5 +63,29 @@ struct ProjectLinks: View {
     private func copy(_ string: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(string, forType: .string)
+    }
+}
+
+/// Attach to the persistent menu owner so dismissing a context menu doesn't lose its confirmation.
+struct TunnelSharingConfirmation: ViewModifier {
+    let store: WorkspaceStore
+    @Binding var pendingShare: PendingTunnelShare?
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Share this local service publicly?", isPresented: Binding(
+            get: { pendingShare != nil }, set: { if !$0 { pendingShare = nil } }
+        ), titleVisibility: .visible) {
+            Button("Start tunnel") {
+                if let request = pendingShare {
+                    store.perform {
+                        try store.startTunnel(for: request.task.id, projectID: request.projectID,
+                            confirmedURL: request.task.localURL ?? "")
+                    }
+                }
+                pendingShare = nil
+            }
+        } message: {
+            Text("Anyone with the temporary link can access \(pendingShare?.task.localURL ?? "this service"). Only share a service you intend to expose. Requires cloudflared on your shell's PATH; Taskport won't install it.")
+        }
     }
 }

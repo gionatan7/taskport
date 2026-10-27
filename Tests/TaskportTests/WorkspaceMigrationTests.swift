@@ -3,6 +3,21 @@ import Testing
 @testable import Taskport
 
 struct WorkspaceMigrationTests {
+    @Test func obsoleteSplitLayoutIsDiscardedWithoutChangingTasksOrSelection() throws {
+        let first = ProjectTask(definition: TaskDefinition(name: "Web", command: "true"))
+        let second = ProjectTask(definition: TaskDefinition(name: "API", command: "true"), pinned: true)
+        let project = Project(name: "Example", directory: "/example/project", tasks: [first, second], selectedTaskID: first.id)
+        let document = WorkspaceDocument(projects: [project], selectedProjectID: project.id)
+        var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(document)) as? [String: Any])
+        var projects = try #require(object["projects"] as? [[String: Any]])
+        projects[0]["split"] = ["taskID": second.id.uuidString, "axis": "sideBySide", "ratio": 0.6]
+        object["projects"] = projects
+        let decoded = try WorkspaceMigration.decode(JSONSerialization.data(withJSONObject: object))
+        #expect(decoded == document)
+        let saved = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded)) as? [String: Any])
+        #expect((saved["projects"] as? [[String: Any]])?.first?["split"] == nil)
+    }
+
     @Test @MainActor func unchangedStartupStillPersistsMigrationAndPrivateBackup() throws {
         let root = testDirectory("migration-startup")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])

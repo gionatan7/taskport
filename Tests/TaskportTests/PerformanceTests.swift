@@ -19,7 +19,7 @@ struct PerformanceTests {
         for task in tasks.prefix(2) { try store.startTask(task.id, projectID: project.id, activate: false) }
         try await waitUntil { store.sessions.allSatisfy { $0.phase == .exited(0) } }
         let coordinator = NativeTerminalDeck.Coordinator()
-        let view = TaskSplitView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
+        let view = TaskTerminalContainer(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
         coordinator.update(view, store: store)
         print("PERFORMANCE native hosts: \(coordinator.hosts.count) for 200 definitions, 2 sessions, 1 visible placeholder")
         #expect(coordinator.hosts.count == 3)
@@ -33,10 +33,10 @@ struct PerformanceTests {
         #expect(coordinator.hosts[tasks[0].id] === firstHost)
         #expect(coordinator.hosts[tasks[1].id] === secondHost)
         try store.openTask(tasks[0].id, projectID: project.id)
-        try store.setSplit(projectID: project.id, taskID: tasks[1].id)
         coordinator.update(view, store: store)
         #expect(coordinator.hosts.count == 2)
-        #expect(view.arrangedSubviews.count == 2)
+        #expect(view.subviews.filter { !$0.isHidden }.count == 1)
+        #expect(secondHost.isHidden)
         #expect(coordinator.hosts[tasks[0].id] === firstHost)
         #expect(store.session(tasks[0].id) === firstSession)
         let window = NSWindow(contentRect: view.frame, styleMask: [.borderless], backing: .buffered, defer: false)
@@ -44,13 +44,16 @@ struct PerformanceTests {
         window.contentView = view
         defer { window.contentView = nil; window.close() }
         view.layoutSubtreeIfNeeded()
+        #expect(firstHost.frame == view.bounds)
+        window.setContentSize(NSSize(width: 1040, height: 680))
+        view.layoutSubtreeIfNeeded()
+        #expect(firstHost.frame == view.bounds)
         try await waitUntil { firstSession.terminal.surface != nil }
         let surface = try #require(firstSession.terminal.surface)
         guard case .inMemory(let memory) = firstSession.terminal.configuration.backend else {
             Issue.record("Expected the host-I/O backend"); return
         }
         try await waitUntil { memory.readViewportText()?.contains("TASKPORT_HOST_OUTPUT") == true }
-        try store.setSplit(projectID: project.id, taskID: nil)
         try store.openTask(tasks[4].id, projectID: project.id)
         coordinator.update(view, store: store)
         #expect(coordinator.hosts[tasks[0].id] === firstHost)

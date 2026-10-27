@@ -1,64 +1,52 @@
 import GhosttyTerminal
 import SwiftUI
 
-/// Retain session-backed hosts and only visible placeholders. Switching panes keeps surfaces alive.
+/// Retain session-backed hosts and the selected placeholder so tab switches keep surfaces alive.
 struct NativeTerminalDeck: NSViewRepresentable {
     let store: WorkspaceStore
 
     func makeCoordinator() -> Coordinator { Coordinator() }
-    func makeNSView(context: Context) -> TaskSplitView {
-        let view = TaskSplitView()
-        view.arrangesAllSubviews = false
-        view.dividerStyle = .thin
-        view.isVertical = true
-        view.delegate = context.coordinator
-        view.setAccessibilityLabel("Terminal panes")
+    func makeNSView(context: Context) -> TaskTerminalContainer {
+        let view = TaskTerminalContainer()
+        view.setAccessibilityRole(.group)
+        view.setAccessibilityLabel("Terminal")
         return view
     }
 
-    func updateNSView(_ view: TaskSplitView, context: Context) {
+    func updateNSView(_ view: TaskTerminalContainer, context: Context) {
         context.coordinator.update(view, store: store)
     }
 
-    @MainActor final class Coordinator: NSObject, NSSplitViewDelegate {
-        var hosts: [UUID: NSHostingView<TaskPane>] = [:]
-        var layoutKey = ""
-        var isUpdating = false
-        var onResize: ((Double) -> Void)?
-        var resizeTask: Task<Void, Never>?
+    @MainActor final class Coordinator {
+        var hosts: [UUID: NSHostingView<TaskTerminalContent>] = [:]
+        var selectedID: UUID?
 
-        func update(_ view: TaskSplitView, store: WorkspaceStore) {
-            let project = store.selectedProject
-            let primary = store.selectedTaskID
-            let secondary = store.selectedQuickTerminal == nil ? project?.split?.taskID : nil
-            let visible = [primary, secondary].compactMap { $0 }
-            let visibleIDs = Set(visible)
-            let axis = project?.split?.axis ?? .sideBySide
-            let nextLayoutKey = "\(project?.id.uuidString ?? "")-\(visible)-\(axis)"
+        func update(_ view: TaskTerminalContainer, store: WorkspaceStore) {
+            let selected = store.selectedTaskID
             let sessions = Dictionary(uniqueKeysWithValues: store.sessions.map { ($0.id, $0) })
             let allIDs = Set(store.document.projects.flatMap(\.tasks).map(\.id)).union(sessions.values.filter(\.isQuickTerminal).map(\.id))
-            let retainedIDs = Set(sessions.keys).union(visibleIDs).intersection(allIDs)
+            var retainedIDs = Set(sessions.keys)
+            if let selected { retainedIDs.insert(selected) }
+            retainedIDs.formIntersection(allIDs)
             for id in Array(hosts.keys) where !retainedIDs.contains(id) {
-                if let host = hosts.removeValue(forKey: id) {
-                    if view.arrangedSubviews.contains(host) { view.removeArrangedSubview(host) }
-                    host.removeFromSuperview()
-                }
+                hosts.removeValue(forKey: id)?.removeFromSuperview()
             }
             for owner in store.document.projects {
                 let tabs: [(id: UUID, task: ProjectTask?)] = owner.tasks.map { ($0.id, $0) }
                     + store.sessions.filter { $0.projectID == owner.id && $0.isQuickTerminal }.map { ($0.id, nil) }
                 for tab in tabs where retainedIDs.contains(tab.id) {
-                    let pane = TaskPane(task: tab.task, terminalID: tab.id, projectID: owner.id, store: store, showHeader: secondary != nil && visibleIDs.contains(tab.id))
-                    let host: NSHostingView<TaskPane>
-                    if let existing = hosts[tab.id] { host = existing; host.rootView = pane }
+                    let content = TaskTerminalContent(task: tab.task, terminalID: tab.id, projectID: owner.id, store: store)
+                    let host: NSHostingView<TaskTerminalContent>
+                    if let existing = hosts[tab.id] { host = existing; host.rootView = content }
                     else {
-                        host = NSHostingView(rootView: pane)
+                        host = NSHostingView(rootView: content)
                         host.sizingOptions = []
+                        host.autoresizingMask = []
                         host.frame = view.bounds
                         hosts[tab.id] = host
                         view.addSubview(host)
                     }
-                    host.isHidden = !visibleIDs.contains(tab.id)
+                    host.isHidden = tab.id != selected
                     host.setAccessibilityHidden(host.isHidden)
                     if let session = sessions[tab.id], session.terminal.isSurfaceVisible == host.isHidden {
                         DispatchQueue.main.async { [weak host, weak session] in
@@ -68,155 +56,50 @@ struct NativeTerminalDeck: NSViewRepresentable {
                     }
                 }
             }
-            onResize = { ratio in
-                if let project { store.saveSplitRatio(ratio, projectID: project.id, axis: axis) }
-            }
-            view.onPositionChanged = { [weak self] ratio in self?.saveUserRatio(ratio) }
-            guard layoutKey != nextLayoutKey else { return }
-            isUpdating = true
-            view.applyingRatio = true
-            resizeTask?.cancel()
-            layoutKey = nextLayoutKey
-            view.isVertical = axis == .sideBySide
-            for arranged in view.arrangedSubviews { view.removeArrangedSubview(arranged) }
-            for id in visible {
-                if let host = hosts[id] { view.addArrangedSubview(host) }
-            }
-            view.proportion = project?.split?.ratio ?? 0.5
-            view.adjustSubviews()
-            view.applyingRatio = false
-            view.applyProportion()
-            isUpdating = false
-            if let primary, let session = sessions[primary] {
+            guard selectedID != selected else { return }
+            selectedID = selected
+            view.needsLayout = true
+            if let selected, let session = sessions[selected] {
                 DispatchQueue.main.async { session.terminal.requestFocus() }
             }
         }
-
-        func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-            min(splitView.isVertical ? 180 : 110, (splitView.isVertical ? splitView.bounds.width : splitView.bounds.height) * 0.35)
-        }
-        func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-            let length = splitView.isVertical ? splitView.bounds.width : splitView.bounds.height
-            return length - min(splitView.isVertical ? 180 : 110, length * 0.35)
-        }
-        func splitViewDidResizeSubviews(_ notification: Notification) {
-            guard !isUpdating, let view = notification.object as? TaskSplitView,
-                  !view.applyingRatio, view.arrangedSubviews.count == 2 else { return }
-            // Layout/toolbar/window restoration also posts this notification. Only a
-            // user divider move may replace the authoritative saved proportion.
-            guard (notification.userInfo?["NSSplitViewUserResizeKey"] as? NSNumber)?.boolValue == true else { return }
-            let length = view.isVertical ? view.bounds.width : view.bounds.height
-            guard length > 0 else { return }
-            let first = view.arrangedSubviews[0].frame
-            let ratio = (view.isVertical ? first.width : first.height) / length
-            view.proportion = ratio
-            saveUserRatio(ratio)
-        }
-
-        func saveUserRatio(_ ratio: Double) {
-            guard !isUpdating else { return }
-            resizeTask?.cancel()
-            let callback = onResize
-            resizeTask = Task {
-                do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
-                callback?(ratio)
-            }
-        }
     }
 }
 
-/// SwiftUI initially mounts with zero bounds; defer restoration until a real layout exists.
-final class TaskSplitView: NSSplitView {
-    var proportion = 0.5
-    var applyingRatio = false
-    var onPositionChanged: ((Double) -> Void)?
-
-    override func setPosition(_ position: CGFloat, ofDividerAt dividerIndex: Int) {
-        let userChange = !applyingRatio
-        let length = isVertical ? bounds.width : bounds.height
-        if userChange, length > 1 { proportion = position / length }
-        super.setPosition(position, ofDividerAt: dividerIndex)
-        if userChange, length > 1, arrangedSubviews.count == 2 {
-            let first = arrangedSubviews[0].frame
-            proportion = (isVertical ? first.width : first.height) / length
-            onPositionChanged?(proportion)
-        }
-    }
-
-    override func adjustSubviews() {
-        let previous = applyingRatio
-        applyingRatio = true
-        super.adjustSubviews()
-        applyingRatio = previous
-    }
-
+/// Hidden terminals retain their last size; the selected terminal fills the available space.
+final class TaskTerminalContainer: NSView {
     override func layout() {
-        applyingRatio = true
         super.layout()
-        applyingRatio = false
-        applyProportion()
+        for host in subviews where !host.isHidden && host.frame != bounds { host.frame = bounds }
     }
 
     override func resizeSubviews(withOldSize oldSize: NSSize) {
-        applyingRatio = true
         super.resizeSubviews(withOldSize: oldSize)
-        applyingRatio = false
-        applyProportion()
-    }
-
-    func applyProportion() {
-        let length = isVertical ? bounds.width : bounds.height
-        guard length > 1, arrangedSubviews.count == 2 else { return }
-        applyingRatio = true
-        setPosition(length * min(0.85, max(0.15, proportion)), ofDividerAt: 0)
-        applyingRatio = false
+        needsLayout = true
     }
 }
 
-struct TaskPane: View {
+struct TaskTerminalContent: View {
     let task: ProjectTask?
     let terminalID: UUID
     let projectID: UUID
     let store: WorkspaceStore
-    let showHeader: Bool
     @FocusState private var focused: Bool
 
     var body: some View {
-        let session = store.session(terminalID)
-        VStack(spacing: 0) {
-            if showHeader, let task {
-                HStack {
-                    Button(task.definition.name, systemImage: "terminal") { session?.terminal.requestFocus() }
-                        .buttonStyle(.borderless).help("Focus \(task.definition.name) terminal")
-                    Spacer()
-                    Text(session?.manualCommandRunning == true ? "Terminal in use" : session?.phase.label ?? "Stopped")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Button {
-                        if session?.phase.isActive == true { store.stopTask(task.id, projectID: projectID) }
-                        else { start() }
-                    } label: {
-                        Image(systemName: session?.phase.isActive == true ? "stop.fill" : "play.fill").frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("\(session?.phase.isActive == true ? "Stop" : "Start") \(task.definition.name) in pane")
-                }.padding(.horizontal, 10).background(.bar)
-                Divider()
+        if let session = store.session(terminalID) {
+            TerminalSurfaceView(context: session.terminal).terminalFocused($focused)
+        } else if let task {
+            ContentUnavailableView {
+                Label(task.definition.name, systemImage: "terminal")
+            } description: {
+                Text(task.definition.command).font(.system(.body, design: .monospaced))
+            } actions: {
+                Button("Start task", action: start)
             }
-            if let session {
-                TerminalSurfaceView(context: session.terminal).terminalFocused($focused)
-            } else if let task {
-                ContentUnavailableView {
-                    Label(task.definition.name, systemImage: "terminal")
-                } description: {
-                    Text(task.definition.command).font(.system(.body, design: .monospaced))
-                } actions: {
-                    Button("Start task", action: start)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .textBackgroundColor))
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .textBackgroundColor))
         }
-        .overlay { if showHeader && focused { Rectangle().stroke(Color.accentColor.opacity(0.6), lineWidth: 1).allowsHitTesting(false) } }
     }
 
     private func start() {

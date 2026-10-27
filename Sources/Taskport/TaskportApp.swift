@@ -15,7 +15,7 @@ struct TaskportApp: App {
             WorkspaceView(store: appDelegate.store).frame(minWidth: 850, minHeight: 540)
         }
         .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified)
+        .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1180, height: 760)
         .commands {
             CommandGroup(after: .appInfo) {
@@ -80,6 +80,7 @@ final class TaskportAppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         window = NSApp.windows.first { $0.canBecomeMain }
         window?.delegate = self
         window?.autorecalculatesKeyViewLoop = true
+        window?.isMovableByWindowBackground = true
         showWindow()
         if let startupError { store.blockWrites("Update restore unavailable: \(startupError)"); return }
         do {

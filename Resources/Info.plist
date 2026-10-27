@@ -18,6 +18,7 @@
     <key>SUAllowsAutomaticUpdates</key><false/>
     <key>SUEnableSystemProfiling</key><false/>
     <key>NSHighResolutionCapable</key><true/>
+    <key>NSAccentColorName</key><string>AccentColor</string>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSAppleEventsUsageDescription</key><string>Taskport opens a Ghostty tab in your project directory when you choose Open in Ghostty.</string>
     <key>UTExportedTypeDeclarations</key><array><dict>

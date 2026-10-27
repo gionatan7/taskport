@@ -48,6 +48,18 @@ extension WorkspaceStore {
         }
     }
 
+    var hasExpandedGroups: Bool {
+        !document.groups.isEmpty && (document.groups.contains { !$0.isCollapsed } || document.projectsGroupCollapsed != true)
+    }
+
+    func setAllGroupsCollapsed(_ collapsed: Bool) throws {
+        guard !document.groups.isEmpty else { return }
+        try commit { document in
+            for index in document.groups.indices { document.groups[index].isCollapsed = collapsed }
+            document.projectsGroupCollapsed = collapsed
+        }
+    }
+
     func moveGroup(_ id: UUID, relativeTo targetID: UUID?, after: Bool = false) throws {
         try validateGroup(id)
         try validateGroup(targetID)

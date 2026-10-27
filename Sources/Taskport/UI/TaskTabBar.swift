@@ -12,6 +12,7 @@ struct TaskTabBar: View {
                 ForEach(store.visibleTasks(in: project)) { task in
                     let session = store.session(task.id)
                     let phase = session?.phase ?? .stopped
+                    let isSelected = store.selectedTaskID == task.id
                     HStack(spacing: 4) {
                         Button {
                             store.perform { try store.openTask(task.id, projectID: project.id) }
@@ -24,7 +25,7 @@ struct TaskTabBar: View {
                             }.padding(.vertical, 7).padding(.leading, 9).padding(.trailing, 4)
                         }
                         .accessibilityLabel("\(task.definition.name), \(phase.label)")
-                        .accessibilityAddTraits(store.selectedTaskID == task.id ? .isSelected : [])
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                         Button {
                             if phase.isActive { store.stopTask(task.id, projectID: project.id) }
                             else if task.isTunnel { store.errorMessage = "Start a tunnel from Task links after confirming public exposure." }
@@ -45,7 +46,8 @@ struct TaskTabBar: View {
                         }
                     }
                     .buttonStyle(.borderless)
-                    .background(store.selectedTaskID == task.id ? Color.primary.opacity(0.08) : .clear, in: .rect(cornerRadius: 7))
+                    .foregroundStyle(isSelected ? .white : .primary)
+                    .background(isSelected ? Color("SelectionBackground") : .clear, in: .rect(cornerRadius: 7))
                     .help(session?.manualCommandRunning == true ? "Terminal in use" : phase.label)
                     .contextMenu {
                         if !task.pinned { Button("Close tab") { requestClose(task.id) }.disabled(store.isReadOnly) }
@@ -56,6 +58,7 @@ struct TaskTabBar: View {
                 }
                 ForEach(store.quickTerminals(in: project)) { terminal in
                     let name = terminal.quickTerminalName ?? "Terminal"
+                    let isSelected = store.selectedTaskID == terminal.id
                     HStack(spacing: 4) {
                         Button {
                             store.perform { try store.selectQuickTerminal(terminal.id, projectID: project.id) }
@@ -63,7 +66,7 @@ struct TaskTabBar: View {
                             Label(name, systemImage: "terminal")
                                 .padding(.vertical, 7).padding(.leading, 9).padding(.trailing, 4)
                         }
-                        .accessibilityAddTraits(store.selectedTaskID == terminal.id ? .isSelected : [])
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                         Button { requestClose(terminal.id) } label: {
                             Image(systemName: "xmark").font(.caption).frame(width: 28, height: 28)
                         }
@@ -71,7 +74,8 @@ struct TaskTabBar: View {
                         .disabled(store.isReadOnly || store.shutdownInProgress)
                     }
                     .buttonStyle(.borderless)
-                    .background(store.selectedTaskID == terminal.id ? Color.primary.opacity(0.08) : .clear, in: .rect(cornerRadius: 7))
+                    .foregroundStyle(isSelected ? .white : .primary)
+                    .background(isSelected ? Color("SelectionBackground") : .clear, in: .rect(cornerRadius: 7))
                     .help(terminal.manualCommandRunning ? "Terminal in use" : "Interactive shell")
                     .contextMenu {
                         Button("Close tab") { requestClose(terminal.id) }.disabled(store.isReadOnly || store.shutdownInProgress)

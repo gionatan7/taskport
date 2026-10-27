@@ -8,7 +8,7 @@ Taskport is early software under active development. See [current limitations](d
 
 - Save projects and tasks; review VS Code tasks and package scripts before importing.
 - Pin long-running services for Run all; keep one-offs and temporary experiments separate.
-- Use interactive terminals with your zsh prompt, retained output, and two resizable panes.
+- Use interactive terminals with your zsh prompt and retained output.
 - Give each server task its own local URL and optional, explicitly authorized Cloudflare tunnel.
 - Control projects, tasks, and active sessions through the CLI and portable agent skill.
 - Organize projects into collapsible groups and open quick terminal tabs without creating tasks.
@@ -56,7 +56,7 @@ The active icon source is `Resources/Taskport-Pills.icon`; edit it in Icon Compo
 
 Add a folder, review imports in Tasks, and pin the services you want Run all to start. The + button adds an app-local task. Imported commands stay unchanged; editing creates a local override after a notice, while pinning alone does not.
 
-Each task tab is a real terminal: type commands or use Ctrl-C. The Terminal panes menu shows another task beside or below it without duplicating its process. Closing an unpinned tab discards its output, not its saved task. Project folder changes require idle terminals; relative task paths follow the new folder, but absolute paths stay unchanged. No files move or tasks re-import automatically.
+Each task tab is a real terminal: type commands or use Ctrl-C. Closing an unpinned tab discards its output, not its saved task. Project folder changes require idle terminals; relative task paths follow the new folder, but absolute paths stay unchanged. No files move or tasks re-import automatically.
 
 Quick terminal opens a shell in the selected project's folder without saving a task. These tabs close when their shells exit and do not participate in Run all or session restore. Finish manual terminal work before an update or restart; Taskport cannot replay arbitrary interactive commands.
 

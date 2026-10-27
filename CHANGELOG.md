@@ -6,7 +6,7 @@ First public release of Taskport, a native macOS workspace for project tasks and
 
 - Saved projects, collapsible/reorderable groups, and reviewed imports from VS Code tasks and package scripts.
 - Pinned services with Run all, individual task control, one-offs, and temporary experiments.
-- Interactive terminals, two resizable task panes, and runtime-only quick terminal tabs.
+- Interactive terminal tabs with retained output and runtime-only quick terminal tabs.
 - Per-task local links and optional, explicitly authorized Cloudflare tunnels.
 - A bundled CLI and installable agent skill for projects, groups, tasks, logs, active sessions, and occupied TCP ports.
 - Signed Sparkle updates with confirmation before installation and restoration of previously running services.

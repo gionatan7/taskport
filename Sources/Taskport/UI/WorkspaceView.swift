@@ -20,13 +20,21 @@ struct WorkspaceView: View {
     @State private var pendingEdit: ProjectTask?
     @State private var showOverrideNotice = false
     @State private var sidebarWidth: CGFloat = 230
+    @State private var sidebarWidthTask: Task<Void, Never>?
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .automatic
 
     var body: some View {
-        NavigationSplitView {
-            ProjectSidebar(store: store, sheet: $sheet)
+        NavigationSplitView(columnVisibility: $sidebarVisibility) {
+            ProjectSidebar(store: store, sheet: $sheet, isVisible: sidebarVisibility != .detailOnly)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 // Keep the reopening target at the user's width, not the initial default.
-                if (190...360).contains(width), abs(width - sidebarWidth) > 0.5 { sidebarWidth = width }
+                // Settle first: per-frame writes retarget the collapse/expand animation mid-flight.
+                sidebarWidthTask?.cancel()
+                guard (190...360).contains(width), abs(width - sidebarWidth) > 0.5 else { return }
+                sidebarWidthTask = Task {
+                    do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+                    sidebarWidth = width
+                }
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: sidebarWidth, max: 360)
             .navigationTitle("Taskport")
@@ -44,6 +52,12 @@ struct WorkspaceView: View {
             .overlay(alignment: .top) { TunnelCopyToast(store: store) }
             .navigationTitle(store.selectedProject?.name ?? "Taskport")
             .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    ProjectWindowTitle(title: store.selectedProject?.name ?? "Taskport")
+                }
+                if #available(macOS 26, *) {
+                    ToolbarSpacer(.flexible, placement: .navigation)
+                }
                 if let project = store.selectedProject {
                     ToolbarItemGroup(placement: .primaryAction) {
                         Button("Run all", systemImage: "play.fill") { store.runAll(in: project) }
@@ -72,7 +86,6 @@ struct WorkspaceView: View {
                         .help("Open a shell in this project's folder")
                         .disabled(store.isReadOnly || store.shutdownInProgress || store.restoreInProgress)
                         ProjectLinks(project: project, store: store)
-                        PaneMenu(project: project, store: store)
                     }
                 }
             }
@@ -127,6 +140,30 @@ struct WorkspaceView: View {
         guard let project = store.selectedProject else { return }
         store.perform {
             sheet = .imports(project.id, try TaskImporter.discover(in: URL(fileURLWithPath: project.directory)))
+        }
+    }
+}
+
+/// A native title label that forwards window dragging even when its text is hit.
+private struct ProjectWindowTitle: NSViewRepresentable {
+    let title: String
+
+    func makeNSView(context: Context) -> TitleField {
+        let field = TitleField(labelWithString: title)
+        field.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        field.lineBreakMode = .byTruncatingTail
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+
+    func updateNSView(_ field: TitleField, context: Context) { field.stringValue = title }
+
+    final class TitleField: NSTextField {
+        override var mouseDownCanMoveWindow: Bool { true }
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func mouseDown(with event: NSEvent) {
+            if event.clickCount == 1 { window?.performDrag(with: event) }
+            else { super.mouseDown(with: event) }
         }
     }
 }

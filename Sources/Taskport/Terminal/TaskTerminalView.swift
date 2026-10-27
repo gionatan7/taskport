@@ -7,6 +7,9 @@ final class TaskTerminalView: AppTerminalView {
     private(set) var lastLeftMouseEvent: NSEvent?
     var onDetach: (() -> Void)?
 
+    // Window-background dragging must never consume terminal selection gestures.
+    override var mouseDownCanMoveWindow: Bool { false }
+
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         if window != nil, newWindow !== window { onDetach?() }
         super.viewWillMove(toWindow: newWindow)

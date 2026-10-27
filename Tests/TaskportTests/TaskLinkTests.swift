@@ -94,11 +94,9 @@ struct TaskLinkTests {
         #expect(store.selectedProject?.tasks.contains { $0.id == failure.id } == true)
         #expect(store.document.runningPinnedTaskIDs ?? [] == [])
         try store.openTask(stopped.id, projectID: projectID)
-        try store.setSplit(projectID: projectID, taskID: failure.id)
         store.stopTask(stopped.id, projectID: projectID)
         try await waitUntil { store.session(stopped.id) == nil }
         #expect(store.selectedTaskID == failure.id)
-        #expect(store.selectedProject?.split == nil)
         try store.closeTab(failure.id, projectID: projectID)
         try store.closeTab(interruptedFailure.id, projectID: projectID)
         try await waitUntil { store.openShellCount == 0 }
@@ -172,12 +170,10 @@ struct TaskLinkTests {
         try store.saveTask(saved, projectID: projectID)
         try store.saveTask(temporary, projectID: projectID)
         try store.openTask(temporary.id, projectID: projectID)
-        try store.setSplit(projectID: projectID, taskID: saved.id)
         let reopened = WorkspaceStore(directory: store.persistence.directory)
         reopened.resumePinnedTasks()
         #expect(reopened.selectedProject?.tasks == [saved])
         #expect(reopened.selectedTaskID == saved.id)
-        #expect(reopened.selectedProject?.split == nil)
         #expect(reopened.sessions.isEmpty)
         #expect(try reopened.persistence.load() == reopened.document)
     }

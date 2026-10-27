@@ -57,7 +57,6 @@ struct Project: Codable, Identifiable, Equatable {
     var groupID: UUID?
     var tasks: [ProjectTask] = []
     var selectedTaskID: UUID?
-    var split: PaneSplit?
     var linkedTasks: [ProjectTask] { tasks.filter { !$0.isTunnel && !($0.localURL ?? "").isEmpty } }
 
     func workingDirectory(for task: ProjectTask) -> URL {
@@ -71,16 +70,6 @@ struct ProjectGroup: Codable, Identifiable, Equatable {
     var id = UUID()
     var name: String
     var isCollapsed = false
-}
-
-enum PaneAxis: String, Codable, CaseIterable {
-    case sideBySide, stacked
-}
-
-struct PaneSplit: Codable, Equatable {
-    var taskID: UUID
-    var axis: PaneAxis
-    var ratio = 0.5
 }
 
 struct WorkspaceDocument: Codable, Equatable {

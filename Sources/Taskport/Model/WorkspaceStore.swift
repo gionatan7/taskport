@@ -53,7 +53,7 @@ final class WorkspaceStore {
 
     func session(_ taskID: UUID) -> TaskSession? { sessions.first { $0.id == taskID } }
     func visibleTasks(in project: Project) -> [ProjectTask] {
-        project.tasks.filter { !closingTabIDs.contains($0.id) && ($0.pinned || openTabIDs.contains($0.id) || session($0.id) != nil || project.selectedTaskID == $0.id || project.split?.taskID == $0.id) }
+        project.tasks.filter { !closingTabIDs.contains($0.id) && ($0.pinned || openTabIDs.contains($0.id) || session($0.id) != nil || project.selectedTaskID == $0.id) }
     }
     func quickTerminals(in project: Project) -> [TaskSession] {
         sessions.filter { $0.projectID == project.id && $0.isQuickTerminal && !closingTabIDs.contains($0.id) }
@@ -96,10 +96,7 @@ final class WorkspaceStore {
         try commit { document in
             guard let index = document.projects.firstIndex(where: { $0.id == projectID }) else { return }
             if document.projects[index].selectedTaskID == taskID {
-                document.projects[index].selectedTaskID = project.split?.taskID ?? remaining.first?.id
-                document.projects[index].split = nil
-            } else if project.split?.taskID == taskID {
-                document.projects[index].split = nil
+                document.projects[index].selectedTaskID = remaining.first?.id
             }
             if task.temporary { document.projects[index].tasks.removeAll { $0.id == taskID } }
         }
@@ -293,10 +290,6 @@ final class WorkspaceStore {
         try commit { document in
             document.selectedProjectID = projectID
             if let index = document.projects.firstIndex(where: { $0.id == projectID }) {
-                if document.projects[index].split?.taskID == taskID,
-                   let previous = document.projects[index].selectedTaskID, previous != taskID {
-                    document.projects[index].split?.taskID = previous
-                }
                 document.projects[index].selectedTaskID = taskID
             }
         }
@@ -422,8 +415,6 @@ final class WorkspaceStore {
                     if let selected = $0.projects[index].selectedTaskID, !ids.contains(selected) {
                         $0.projects[index].selectedTaskID = $0.projects[index].tasks.first?.id
                     }
-                    if let split = $0.projects[index].split,
-                       !ids.contains(split.taskID) || split.taskID == $0.projects[index].selectedTaskID { $0.projects[index].split = nil }
                 }
             }
         }
@@ -446,31 +437,6 @@ final class WorkspaceStore {
         let running = resumeTasksOnLaunch ? Set(sessions.filter { $0.phase == .running }.map(\.id)).intersection(eligible) : []
         guard running != document.runningPinnedTaskIDs ?? [] else { return }
         perform { try commit { $0.runningPinnedTaskIDs = running } }
-    }
-
-    func setSplit(projectID: UUID, taskID: UUID?, axis: PaneAxis = .sideBySide) throws {
-        guard let project = document.projects.first(where: { $0.id == projectID }) else { throw WorkspaceError("Project not found.") }
-        if let taskID {
-            guard !closingTabIDs.contains(taskID) else { throw WorkspaceError("This terminal is still closing.") }
-            guard project.tasks.contains(where: { $0.id == taskID }), taskID != project.selectedTaskID else {
-                throw WorkspaceError("Choose a different task for the second pane.")
-            }
-        }
-        try commit { document in
-            guard let index = document.projects.firstIndex(where: { $0.id == projectID }) else { return }
-            document.projects[index].split = taskID.map { PaneSplit(taskID: $0, axis: axis) }
-        }
-    }
-
-    func saveSplitRatio(_ ratio: Double, projectID: UUID, axis: PaneAxis) {
-        guard ratio.isFinite, let project = document.projects.first(where: { $0.id == projectID }),
-              let split = project.split, split.axis == axis, abs(split.ratio - ratio) > 0.01 else { return }
-        perform {
-            try commit { document in
-                guard let index = document.projects.firstIndex(where: { $0.id == projectID }) else { return }
-                document.projects[index].split?.ratio = min(0.85, max(0.15, ratio))
-            }
-        }
     }
 
     func commit(forceSave: Bool = false, _ update: (inout WorkspaceDocument) -> Void) throws {

@@ -6,13 +6,13 @@ Taskport is a macOS 14+ SwiftUI/AppKit app. Its terminal view comes from the com
 
 - `Sources/Taskport/Model`: project/task definitions, reviewed imports, versioned persistence, runtime orchestration.
 - `Sources/Taskport/Terminal`: Ghostty surfaces, local appearance, shell integration, session lifecycle.
-- `Sources/Taskport/UI`: native workspace, editors, menus, and pane presentation.
+- `Sources/Taskport/UI`: native workspace, editors, menus, and terminal presentation.
 - `Sources/TaskportPTY`: C process/PTY and listener-discovery primitives.
 - `Sources/TaskportControl` and `Sources/TaskportCLI`: local socket protocol and command-line client.
 
-Projects have stable IDs, directories, icons, tasks, and saved pane selection/layout. Tasks separate command/cwd/environment definitions from pinning, run classification, URL, temporary status, and an optional imported snapshot. Tunnels reference their owner task. Only non-temporary pinned services participate in Run all/sidebar status.
+Projects have stable IDs, directories, icons, tasks, and saved task selection. Tasks separate command/cwd/environment definitions from pinning, run classification, URL, temporary status, and an optional imported snapshot. Tunnels reference their owner task. Only non-temporary pinned services participate in Run all/sidebar status.
 
-`WorkspaceStore` is the single writer; UI and CLI mutations run on its main actor. Definitions/layouts are versioned JSON in private Application Support, not in the checkout. Runtime sessions and scrollback are not serialized. Startup reacquires an exclusive workspace lock and reloads the authoritative file before cleanup, migration, or resume. Lock/load errors make the store read-only rather than overwriting data. Unchanged saves are skipped, while migration checkpoints and private backups still persist.
+`WorkspaceStore` is the single writer; UI and CLI mutations run on its main actor. Definitions and UI state are versioned JSON in private Application Support, not in the checkout. Runtime sessions and scrollback are not serialized. Startup reacquires an exclusive workspace lock and reloads the authoritative file before cleanup, migration, or resume. Lock/load errors make the store read-only rather than overwriting data. Unchanged saves are skipped, while migration checkpoints and private backups still persist.
 
 Normal resume is a saved intent to start fresh processes, not daemon/session restoration. It is enabled by default for previously running pinned services; explicit stops clear those IDs. One-offs, unpinned services, temporary tasks, and tunnels do not automatically resume. Explicit [CLI session restore](cli.md#session-restore) instead uses a private one-time checkpoint, including previously active unpinned/temporary services and separately authorized one-offs/tunnels. See [runtime privacy](public-source.md#runtime-privacy-and-trust).
 
@@ -30,7 +30,7 @@ The C bridge calls `forkpty` and execs `/bin/zsh -il`; no Swift runs in the fork
 
 Ctrl-C uses foreground terminal semantics. Force stop and confirmed Quit signal owned POSIX-session processes and escalate after a grace period, retaining PID ownership until reaped. Intentionally detached processes in another session are outside cleanup guarantees. Hiding the window retains sessions; full Quit does not.
 
-Session-backed native hosts/surfaces remain alive across hidden projects. Only visible unstarted tabs need placeholder hosts; saved definitions alone allocate no native pane. A session replays its last valid Ghostty grid size to a replacement PTY before dispatching a command. The two-pane layout never duplicates a session.
+Session-backed native hosts/surfaces remain alive across hidden projects. Only the selected unstarted tab needs a placeholder host; saved definitions alone allocate no terminal view. A session replays its last valid Ghostty grid size to a replacement PTY before dispatching a command.
 
 Activity means received output bytes, not repainting or cursor blink. Listening-port refresh batches all session owners into one process snapshot and rejects observations after shell identity changes. A detected TCP listener is not a readiness/health guarantee.
 
@@ -44,7 +44,7 @@ Each linked task owns an optional temporary Cloudflare tunnel. Public exposure r
 
 ## Native UI
 
-Use standard `NavigationSplitView`, sidebar `List`, toolbar items, buttons, menus, popovers, sheets, alerts, `NSOpenPanel`, and SF Symbols. Independent task edit/pin actions belong in a popover, not custom-drawn menu rows. Terminal panes use AppKit `NSSplitView`; their orientation/proportion persist. An empty project hides the tab strip.
+Use standard `NavigationSplitView`, sidebar `List`, toolbar items, buttons, menus, popovers, sheets, alerts, `NSOpenPanel`, and SF Symbols. Independent task edit/pin actions belong in a popover, not custom-drawn menu rows. The selected tab's terminal fills the content area. An empty project hides the tab strip.
 
 Keep terminal content opaque and readable. Let native controls adopt current platform materials instead of simulating blur or glass. Use semantic labels rather than color alone; throttle output activity and respect Reduce Motion. Follow Apple's [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass), [Materials](https://developer.apple.com/design/human-interface-guidelines/materials), and [Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars) guidance.
 
@@ -52,7 +52,7 @@ Keep terminal content opaque and readable. Let native controls adopt current pla
 
 - Zsh only; broader prompt-framework compatibility, stubborn/detached processes, and long-running stress acceptance need further testing.
 - Terminal text accessibility/VoiceOver, IME, native selection/copy/paste, resize/reflow, multiple hidden surfaces, and Intel builds need broader live acceptance. Automated lifecycle tests are not complete accessibility or input-method certification.
-- Two panes, not nested splits; no dependency/group runner, automatic source refresh, explicit saved-task removal, or complete keyboard tab navigation.
+- No dependency/group runner, automatic source refresh, explicit saved-task removal, or complete keyboard tab navigation.
 - CLI logs are bounded in-memory snapshots, not a live tail. No force-kill or arbitrary terminal-input CLI API. Saved task environment values are not stored in Keychain; no export feature.
 - Tunnel tests simulate output/lifecycle without exposure. Real public-tunnel acceptance, origin reachability, and missing-cloudflared UX remain separate checks requiring authorization.
 - Release bundles are ad-hoc signed, not notarized; first launch can require explicit macOS approval. Release artifacts need their matching dependency sources/relink materials and the [publication checks](public-source.md).

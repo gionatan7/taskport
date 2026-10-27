@@ -87,7 +87,7 @@ struct QuickTerminalTests {
         #expect(restored.document.projects.first?.tasks.isEmpty == true)
     }
 
-    @Test @MainActor func quickTerminalMountsWithoutTasksAndSidebarUsesNativeOverlayScrolling() async throws {
+    @Test @MainActor func quickTerminalMountsWithoutTasksAndSidebarUsesSystemScrolling() async throws {
         _ = NSApplication.shared
         let root = testDirectory("quick-terminal-native")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -110,18 +110,24 @@ struct QuickTerminalTests {
         host.layoutSubtreeIfNeeded()
         var sidebar: NSScrollView?
         try await waitUntil {
-            var pending: [NSView] = [host], lists: [NSScrollView] = [], panes: [TaskSplitView] = []
+            var pending: [NSView] = [host], lists: [NSScrollView] = [], terminals: [TaskTerminalContainer] = []
             while let view = pending.popLast() {
                 if let scroll = view as? NSScrollView, scroll.documentView is NSTableView { lists.append(scroll); sidebar = scroll }
-                if let split = view as? TaskSplitView { panes.append(split) }
+                if let terminal = view as? TaskTerminalContainer { terminals.append(terminal) }
                 pending.append(contentsOf: view.subviews)
             }
-            return !lists.isEmpty && lists.allSatisfy { $0.scrollerStyle == .overlay }
-                && panes.contains { $0.arrangedSubviews.count == 1 }
+            return !lists.isEmpty && lists.allSatisfy { $0.scrollerStyle == NSScroller.preferredScrollerStyle }
+                && terminals.contains { $0.subviews.filter { !$0.isHidden }.count == 1 }
         }
         let scroll = try #require(sidebar)
-        scroll.scrollerStyle = .legacy // SwiftUI can reapply the system style after its own layout.
-        try await waitUntil { scroll.scrollerStyle == .overlay }
+        let scroller = try #require(scroll.verticalScroller)
+        let platformView = try #require(terminal.terminal.attachedPlatformView)
+        #expect(window.makeFirstResponder(platformView))
+        store.selectProject(project)
+        host.layoutSubtreeIfNeeded()
+        try await waitUntil { (window.firstResponder as? NSView)?.isDescendant(of: platformView) == true }
+        #expect(scroll.scrollerStyle == NSScroller.preferredScrollerStyle)
+        #expect(scroll.verticalScroller === scroller)
         #expect(store.selectedProject?.tasks.isEmpty == true)
         try store.closeTab(id, projectID: project)
         try await waitUntil { store.openShellCount == 0 }

@@ -4,6 +4,40 @@ import TaskportControl
 @testable import Taskport
 
 struct WorkspaceGroupTests {
+    @Test @MainActor func bulkDisclosureIncludesDefaultGroupAndPreservesProjects() throws {
+        let root = testDirectory("group-disclosure")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = WorkspaceStore(directory: root.appendingPathComponent("data"))
+        #expect(!store.hasExpandedGroups)
+        try store.setAllGroupsCollapsed(true)
+        #expect(store.document.projectsGroupCollapsed == nil)
+        let work = try store.saveGroup(name: "Work")
+        let personal = try store.saveGroup(name: "Personal")
+        _ = try store.addProject(name: "Example", directory: root.path, groupID: work)
+        let projects = store.document.projects
+        let selection = store.document.selectedProjectID
+        try store.setGroupCollapsed(personal, true)
+        #expect(store.hasExpandedGroups)
+        try store.setAllGroupsCollapsed(true)
+        #expect(store.document.groups.allSatisfy { $0.isCollapsed })
+        #expect(store.document.projectsGroupCollapsed == true)
+        #expect(!store.hasExpandedGroups)
+        #expect(try store.persistence.load() == store.document)
+        try store.setGroupCollapsed(nil, false)
+        #expect(store.hasExpandedGroups) // The default Projects group counts, even when empty.
+        try store.setAllGroupsCollapsed(false)
+        #expect(store.document.groups.allSatisfy { !$0.isCollapsed })
+        #expect(store.document.projectsGroupCollapsed == false)
+        #expect(store.document.projects == projects)
+        #expect(store.document.selectedProjectID == selection)
+        #expect(try store.persistence.load() == store.document)
+        let before = store.document
+        store.blockWrites("Read only")
+        #expect(throws: (any Error).self) { try store.setAllGroupsCollapsed(true) }
+        #expect(store.document == before)
+    }
+
     @Test @MainActor func groupOrderAndDefaultGroupDisclosurePersistWithoutChangingProjects() throws {
         let root = testDirectory("group-reordering")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

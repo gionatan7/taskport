@@ -79,8 +79,6 @@ extension WorkspaceStore {
                     if let selected = $0.projects[index].selectedTaskID, !ids.contains(selected) {
                         $0.projects[index].selectedTaskID = $0.projects[index].tasks.first?.id
                     }
-                    if let split = $0.projects[index].split,
-                       !ids.contains(split.taskID) || split.taskID == $0.projects[index].selectedTaskID { $0.projects[index].split = nil }
                 }
             }
             restoreOpenTabs(handoff.openTaskIDs)

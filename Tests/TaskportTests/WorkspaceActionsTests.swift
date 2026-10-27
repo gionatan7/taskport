@@ -18,7 +18,7 @@ struct WorkspaceActionsTests {
         #expect(store.document.projects.map(\.id) == [first, second])
     }
 
-    @Test @MainActor func closeTabsPreservesDefinitionsAndRepairsSplit() throws {
+    @Test @MainActor func closeTabsPreservesDefinitionsAndSelectsRemainingTab() throws {
         let directory = testDirectory("close-tabs")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -28,10 +28,10 @@ struct WorkspaceActionsTests {
         let second = ProjectTask(definition: TaskDefinition(name: "Second", command: "true", kind: .oneOff))
         try store.saveTask(first, projectID: id)
         try store.saveTask(second, projectID: id)
-        try store.setSplit(projectID: id, taskID: second.id)
+        try store.openTask(second.id, projectID: id)
+        try store.openTask(first.id, projectID: id)
         try store.closeTab(first.id, projectID: id)
         #expect(store.selectedTaskID == second.id)
-        #expect(store.selectedProject?.split == nil)
         try store.closeTab(second.id, projectID: id)
         #expect(store.selectedTaskID == nil)
         #expect(store.visibleTasks(in: try #require(store.selectedProject)).isEmpty)

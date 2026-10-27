@@ -48,7 +48,7 @@ cp "$taskport_bin/taskport-cli" "$taskport_app/Contents/MacOS/taskport-cli"
 # Remove it only from staged copies, before any app signature is produced.
 bash scripts/prepare-runtime-paths.sh "$taskport_app/Contents/MacOS/Taskport" "$taskport_app/Contents/MacOS/taskport-cli"
 cp Resources/Info.plist "$taskport_app/Contents/Info.plist"
-xcrun actool Resources/Taskport-Pills.icon \
+xcrun actool Resources/Taskport-Pills.icon Resources/Theme.xcassets \
     --compile "$taskport_app/Contents/Resources" \
     --output-format human-readable-text --notices --warnings --errors \
     --output-partial-info-plist "$taskport_stage/icon-info.plist" \

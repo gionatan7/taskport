@@ -56,7 +56,6 @@ struct SessionRestoreTests {
         for task in active + [completed] { try store.startTask(task.id, projectID: projectID, activate: false) }
         try await waitUntil { active.allSatisfy { store.session($0.id)?.phase == .running } && store.session(completed.id)?.phase == .exited(0) }
         try store.openTask(completed.id, projectID: projectID)
-        try store.setSplit(projectID: projectID, taskID: temporary.id)
         let previousPID = store.session(temporary.id)?.shellPID
         let handoff = try store.saveSessionHandoff(id: UUID(), includeOneOffs: false, includeTunnels: false)
         #expect(Set(handoff.entries.map(\.taskID)) == Set(active.map(\.id)))
@@ -76,7 +75,6 @@ struct SessionRestoreTests {
         #expect(relaunched.session(temporary.id)?.shellPID != previousPID)
         #expect(!relaunched.resumeTasksOnLaunch)
         #expect(relaunched.selectedTaskID == completed.id)
-        #expect(relaunched.selectedProject?.split?.taskID == temporary.id)
         #expect(relaunched.visibleTasks(in: try #require(relaunched.selectedProject)).contains { $0.id == completed.id })
         #expect(throws: (any Error).self) { try SessionHandoff.load(in: store.persistence.directory) }
         relaunched.terminateAll()

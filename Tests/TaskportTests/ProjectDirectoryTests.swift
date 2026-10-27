@@ -19,7 +19,7 @@ import TaskportControl
         let absolute = ProjectTask(definition: TaskDefinition(name: "Absolute", command: "true", directory: old.path))
         let variable = ProjectTask(definition: TaskDefinition(name: "API", command: "true", directory: "${workspaceFolder}/api"))
         for task in [imported, absolute, variable] { try store.saveTask(task, projectID: id) }
-        try store.setSplit(projectID: id, taskID: variable.id)
+        try store.openTask(variable.id, projectID: id)
         let original = try #require(store.selectedProject)
         var edited = original
         edited.directory = new.path

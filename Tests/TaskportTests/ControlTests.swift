@@ -101,24 +101,20 @@ struct ControlTests {
         #expect(!result2.ok)
     }
 
-    @Test @MainActor func splitSelectionAndPersistence() throws {
-        let directory = testDirectory("split")
+    @Test @MainActor func tabSelectionPersistsWithoutStartingTasks() throws {
+        let directory = testDirectory("tab-selection")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = WorkspaceStore(directory: directory.appendingPathComponent("data"))
-        let project = try store.addProject(name: "Panes", directory: directory.path)
+        let project = try store.addProject(name: "Example", directory: directory.path)
         let first = ProjectTask(definition: TaskDefinition(name: "Web", command: "true"))
         let second = ProjectTask(definition: TaskDefinition(name: "API", command: "true"))
         try store.saveTask(first, projectID: project); try store.saveTask(second, projectID: project)
-        try store.setSplit(projectID: project, taskID: second.id)
+        try store.openTask(first.id, projectID: project)
         try store.openTask(second.id, projectID: project)
         #expect(store.selectedTaskID == second.id)
-        #expect(store.selectedProject?.split?.taskID == first.id)
-        store.saveSplitRatio(0.6, projectID: project, axis: .sideBySide)
-        #expect(try store.persistence.load().projects.first?.split?.ratio == 0.6)
+        #expect(try store.persistence.load().projects.first?.selectedTaskID == second.id)
+        #expect(store.visibleTasks(in: try #require(store.selectedProject)).map(\.id) == [first.id, second.id])
         #expect(store.sessions.isEmpty)
-        #expect(throws: (any Error).self) { try store.setSplit(projectID: project, taskID: second.id) }
-        try store.setSplit(projectID: project, taskID: nil)
-        #expect(store.selectedProject?.split == nil)
     }
 }
