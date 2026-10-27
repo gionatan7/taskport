@@ -6,8 +6,8 @@
     <key>CFBundleDisplayName</key><string>Taskport</string>
     <key>CFBundleExecutable</key><string>Taskport</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1.1</string>
-    <key>CFBundleVersion</key><string>3</string>
+    <key>CFBundleShortVersionString</key><string>0.2.0</string>
+    <key>CFBundleVersion</key><string>4</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>SUFeedURL</key><string>https://github.com/gionatan7/taskport/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key><string>ZAqENNb5Q57l3fcnYbhDRuo+xNQAhB6ylLsn9o/ks2Y=</string>

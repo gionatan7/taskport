@@ -20,7 +20,7 @@ Download the Apple silicon app ZIP from [GitHub Releases](https://github.com/gio
 
 Unzip it and move `Taskport.app` into Applications. This free distribution is ad-hoc signed, not notarized by Apple. If macOS blocks the first launch, try opening the app once, then go to **System Settings → Privacy & Security → Open Anyway** and confirm. Managed Macs may prohibit this approval. See [Apple's instructions](https://support.apple.com/en-us/102445).
 
-The release includes SHA-256 checksums and the matching dependency source/relink archive. To verify the app ZIP, keep its `.sha256` file beside it and run `shasum -a 256 -c Taskport-0.1.1-macos-arm64.zip.sha256`.
+The release includes SHA-256 checksums and the matching dependency source/relink archive. To verify the app ZIP, keep its `.sha256` file beside it and run `shasum -a 256 -c Taskport-0.2.0-macos-arm64.zip.sha256`.
 
 ## Build and run
 
