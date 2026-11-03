@@ -101,8 +101,12 @@ final class WorkspaceStore {
             if task.temporary { document.projects[index].tasks.removeAll { $0.id == taskID } }
         }
         stopAssociatedTunnels(taskID, projectID: projectID)
+        closeTaskSession(taskID)
+    }
+
+    private func closeTaskSession(_ taskID: UUID) {
         openTabIDs.remove(taskID)
-        if let terminal, terminal.shellPID > 0 {
+        if let terminal = session(taskID), terminal.shellPID > 0 {
             closingTabIDs.insert(taskID)
             terminal.onShellExit = { [weak self, weak terminal] in
                 self?.sessions.removeAll { $0 === terminal }
@@ -225,6 +229,33 @@ final class WorkspaceStore {
             try? await Task.sleep(for: .seconds(1))
             self?.sessions.removeAll { $0.projectID == id && $0.shellPID == 0 }
         }
+    }
+
+    /// Remove saved definitions only after every affected terminal is idle.
+    func removeTask(_ taskID: UUID, projectID: UUID) throws {
+        guard let project = document.projects.first(where: { $0.id == projectID }),
+              project.tasks.contains(where: { $0.id == taskID }) else {
+            throw WorkspaceError("Task ID not found. Run tasks list for this project first.")
+        }
+        let removedIDs = Set(project.tasks.filter {
+            $0.id == taskID || ($0.isTunnel && $0.tunnelForTaskID == taskID)
+        }.map(\.id))
+        let owned = sessions.filter { $0.projectID == projectID && removedIDs.contains($0.id) }
+        guard removedIDs.isDisjoint(with: closingTabIDs),
+              owned.allSatisfy({ $0.canStart && ($0.shellPID == 0 || $0.shellReady) }) else {
+            throw WorkspaceError("Stop this task and its tunnels, finish terminal commands, and clear pending input before removing it. Wait for its terminals to become idle.")
+        }
+        let remaining = visibleTasks(in: project).filter { !removedIDs.contains($0.id) }
+        try commit { document in
+            guard let index = document.projects.firstIndex(where: { $0.id == projectID }) else { return }
+            document.projects[index].tasks.removeAll { removedIDs.contains($0.id) }
+            if let selected = document.projects[index].selectedTaskID, removedIDs.contains(selected) {
+                document.projects[index].selectedTaskID = remaining.first?.id
+            }
+            document.runningPinnedTaskIDs?.subtract(removedIDs)
+        }
+        pendingTunnelCopies.subtract(removedIDs)
+        removedIDs.forEach { closeTaskSession($0) }
     }
 
     /// Editor saves are conditional on the snapshot shown when editing began.

@@ -5,7 +5,7 @@ description: Manage Taskport projects, groups, tasks, terminal output, and local
 
 # Taskport
 
-Use the global `taskport` CLI for all Taskport management, including reading terminal output and removing projects. Never use computer use, terminal typing, or workspace JSON edits as a management fallback. If a required command is unavailable, report the CLI gap and ask for direction. GUI automation is only appropriate when the user explicitly asks to test Taskport's own UI, not to operate project tasks.
+Use the global `taskport` CLI for all Taskport management, including reading terminal output and removing projects or tasks. Never use computer use, terminal typing, or workspace JSON edits as a management fallback. If a required command is unavailable, report the CLI gap and ask for direction. GUI automation is only appropriate when the user explicitly asks to test Taskport's own UI, not to operate project tasks.
 
 Use Taskport instead of launching web-app development servers directly in a Codex terminal. The app owns the interactive Ghostty terminals and persists definitions outside the repository. Control uses a private, same-user Unix socket. `ports list` inspects the Mac directly and does not need the app running.
 
@@ -37,7 +37,7 @@ Before assigning a port to a new server, run `taskport ports list` and choose an
 
 This is a listener snapshot, not a reservation or a complete bind-availability test: macOS may hide protected/other-user processes; UDP, outgoing TCP connections, and bound-but-not-listening sockets are not included. A failed scan is not an empty list; request execution approval if the sandbox blocks inspection. Start through Taskport, check task state and the actual local response, and confirm the listening port. If another process takes the port, inspect and choose another; do not stop unrelated services to free it.
 
-## Add and edit
+## Add, edit, and remove
 
 ```sh
 groups add --name Work
@@ -52,10 +52,13 @@ projects edit PROJECT_ID --group none
 projects remove PROJECT_ID
 tasks add PROJECT_ID --name Web --command "bun run dev --port 3000" --kind service --pinned true --url http://localhost:3000
 tasks edit PROJECT_ID TASK_ID --command "bun run dev --port 3001" --url http://localhost:3001
+tasks remove PROJECT_ID TASK_ID
 tasks add PROJECT_ID --name Experiment --command "bun run dev --port 3002" --url http://localhost:3002 --temporary true
 ```
 
 Group removal keeps its projects, tasks, and files; projects become ungrouped. Project removal deletes its Taskport entry and saved task definitions only, never the project folder or files. Remove only the user-authorized project ID. Stop its tasks and manual commands and clear pending terminal input first; a busy project is rejected, not force-stopped. Verify absence with `projects list`. Never delete folders as a substitute for this command.
+
+Task removal accepts one saved task ID from the specified project, including pinned or imported tasks. Read needed logs first, stop that task and its tunnels, finish manual commands, and clear unfinished input. Wait until its terminals are idle; busy or closing terminals reject removal. The task and its inactive associated tunnel entries are removed, idle shells close, and their output is discarded. Project files and imported source definitions stay unchanged; importing the source again can add the task back. Verify the returned `taskID` is absent from `tasks list PROJECT_ID`. Quick terminals have no saved definition and are not accepted by this command. Remove only the user-authorized task; other tasks keep running.
 
 Commands above and below are arguments to `taskport`. Project folders must exist and be absolute. Task `--cwd` is project-relative unless absolute. Optional task fields: `--kind service|oneOff`, `--pinned true|false`, `--url URL`, `--temporary true|false`, and `--env-file FILE` (a JSON string dictionary replacing all environment overrides). Use an HTTP(S) origin without credentials, a path, query, or fragment; `--url ''` clears it. Match the URL to the server's actual listening port, and update it when changing that port. Stop an active associated tunnel before editing the URL. Avoid secrets in command-line arguments, committed files, and public output. Add/edit never execute commands; running task command edits apply on the next start.
 

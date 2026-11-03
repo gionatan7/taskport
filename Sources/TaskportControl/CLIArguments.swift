@@ -23,6 +23,7 @@ public enum CLIArguments {
       [--cwd DIRECTORY] [--kind service|oneOff] [--pinned true|false] [--env-file JSON_FILE]
       [--url URL] [--temporary true|false]
     taskport tasks edit PROJECT_ID TASK_ID [same task options] [--confirm-local-override]
+    taskport tasks remove PROJECT_ID TASK_ID
     taskport tasks start PROJECT_ID TASK_ID... | --all
     taskport tasks stop PROJECT_ID TASK_ID... | --all
     taskport sessions list [--all]
@@ -39,6 +40,9 @@ public enum CLIArguments {
     Group removal keeps its projects, tasks, and files; projects become ungrouped.
     Project removal deletes only Taskport's saved entry and task definitions, never files.
     Stop tasks and manual commands and clear unfinished input before removing a project.
+    Task removal deletes its saved definition and stopped associated tunnels, never project
+    files or imported source definitions. Stop the task and its tunnels, finish manual
+    commands, and clear unfinished input first. Idle terminals close and output is discarded.
     tasks logs returns output and outputTruncated, capturing up to 128 KiB in memory per
     terminal since this app launch. --lines accepts 1–1000 (default 100). ANSI controls
     are omitted. Output may contain secrets; do not publish it. No disk log or stdin access.
@@ -123,7 +127,7 @@ public enum CLIArguments {
                   let groupID = UUID(uuidString: positional[2]) else { throw ControlError("Use a group UUID from groups list; run taskport help.") }
             return ControlRequest(operation: operation, values: values, flags: flags, groupID: groupID)
         }
-        let projectOperations = ["projects.edit", "projects.remove", "tasks.list", "tasks.logs", "tasks.add", "tasks.edit", "tasks.start", "tasks.stop", "tunnels.start", "tunnels.status", "tunnels.stop"]
+        let projectOperations = ["projects.edit", "projects.remove", "tasks.list", "tasks.logs", "tasks.add", "tasks.edit", "tasks.remove", "tasks.start", "tasks.stop", "tunnels.start", "tunnels.status", "tunnels.stop"]
         var projectID: UUID?
         var taskIDs: [UUID] = []
         if projectOperations.contains(operation) {
@@ -133,7 +137,7 @@ public enum CLIArguments {
                 guard let id = UUID(uuidString: $0) else { throw ControlError("Use task UUIDs from tasks list.") }
                 return id
             }
-            if ["tasks.edit", "tasks.logs"].contains(operation) || operation.hasPrefix("tunnels.") {
+            if ["tasks.edit", "tasks.logs", "tasks.remove"].contains(operation) || operation.hasPrefix("tunnels.") {
                 guard taskIDs.count == 1 else { throw ControlError("This operation requires exactly one task ID.") }
             } else if !["tasks.start", "tasks.stop"].contains(operation), !taskIDs.isEmpty {
                 throw ControlError("Unexpected extra IDs.")

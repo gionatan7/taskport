@@ -88,6 +88,12 @@ import TaskportControl
                 guard request.taskIDs.isEmpty else { throw WorkspaceError("Project removal does not accept task IDs.") }
                 try store.removeProject(project.id)
             case "tasks.list": response.tasks = project.tasks.map { taskInfo($0, project: project) }
+            case "tasks.remove":
+                guard request.taskIDs.count == 1, let id = request.taskIDs.first else {
+                    throw WorkspaceError("Specify exactly one task ID from this project.")
+                }
+                try store.removeTask(id, projectID: project.id)
+                response.taskID = id
             case "tasks.logs":
                 guard request.taskIDs.count == 1, let id = request.taskIDs.first,
                       project.tasks.contains(where: { $0.id == id }) || store.quickTerminals(in: project).contains(where: { $0.id == id }) else {
@@ -222,7 +228,7 @@ import TaskportControl
         case "tunnels.status", "tunnels.stop": allowed = []
         case "projects.add", "projects.edit": allowed = ["name", "directory", "group"]
         case "groups.add", "groups.edit": allowed = ["name"]
-        case "groups.list", "groups.remove", "projects.remove": allowed = []
+        case "groups.list", "groups.remove", "projects.remove", "tasks.remove": allowed = []
         case "tasks.logs": allowed = ["lines"]
         case "tasks.add", "tasks.edit": allowed = ["name", "command", "cwd", "kind", "pinned", "environment", "url", "temporary"]; flags = ["confirm-local-override"]
         case "tasks.start", "tasks.stop", "sessions.list": allowed = []; flags = ["all"]
