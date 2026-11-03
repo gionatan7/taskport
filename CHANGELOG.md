@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Remove a saved task with `taskport tasks remove PROJECT_ID TASK_ID`, including pinned and imported tasks.
+- Refuse removal while the task or its tunnels are busy. Inactive associated tunnels and idle terminals are cleaned up without changing project files or imported source definitions.
+- Update CLI help and the bundled agent skill with task-removal guidance.
+
 ## 0.2.0
 
 First public release of Taskport, a native macOS workspace for project tasks and interactive Ghostty terminals.
